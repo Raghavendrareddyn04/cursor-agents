@@ -8,11 +8,12 @@ Visual reference for the Sunny multi-agent system: component architecture, contr
 
 ## 0. System at a glance
 
-**52 orchestrated agents** (plus 2 standalone agents: `documentation` and `fleet-host-agent`), driven through **17 bounded verify/fix loops**.
+**54 orchestrated agents** (plus 2 standalone agents: `documentation` and `fleet-host-agent`), driven through **18 bounded verify/fix loops**.
 
 | Group | Count | Agents |
 |-------|-------|--------|
-| Orchestration & memory | 2 | `sunny`, `context-agent` |
+| Orchestration & memory | 3 | `sunny`, `context-agent`, `issues-log-agent` |
+| Frontend sanitization | 3 | `frontend-sanitize-agent`, `frontend-sanitize-verify-agent` (readonly), `frontend-sanitize-fix-agent` |
 | Architecture & boilerplate | 3 | `architecture-agent`, `architecture-verify-agent` (readonly), `architecture-fix-agent` |
 | Backend build & verify | 3 | `jhipster-backend-agent`, `jhipster-verify-agent` (readonly), `issue-resolution-agent` |
 | Database | 3 | `database-agent`, `database-verify-agent` (readonly), `database-fix-agent` |
@@ -28,9 +29,9 @@ Visual reference for the Sunny multi-agent system: component architecture, contr
 | Production | 2 | `production-standards-agent` (readonly), `production-fix-agent` |
 | Standalone (not orchestrated) | 2 | `documentation`, `fleet-host-agent` |
 
-- **17 verify/fix loops:** architecture + backend code + database + nginx & SSL + 3 backend test layers + 3 frontend test layers + system integration + Swagger + Javadoc + API collection + API tests + API performance + production.
-- **17 readonly auditors:** `architecture-verify-agent`, `jhipster-verify-agent`, `database-verify-agent`, `nginx-verify-agent`, the 6 per-layer test-verify agents, `system-integration-test-verify-agent`, the 5 documentation/API verify agents, and `production-standards-agent`.
-- **Pipeline order:** architecture → backend (JHipster) → database → nginx & SSL (domain + Certbot) → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production.
+- **18 verify/fix loops:** frontend sanitization + architecture + backend code + database + nginx & SSL + 3 backend test layers + 3 frontend test layers + system integration + Swagger + Javadoc + API collection + API tests + API performance + production.
+- **18 readonly auditors:** `frontend-sanitize-verify-agent`, `architecture-verify-agent`, `jhipster-verify-agent`, `database-verify-agent`, `nginx-verify-agent`, the 6 per-layer test-verify agents, `system-integration-test-verify-agent`, the 5 documentation/API verify agents, and `production-standards-agent`.
+- **Pipeline order:** frontend sanitization → architecture → backend (JHipster) → database → nginx & SSL (domain + Certbot) → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production.
 - **Graphify:** operators pre-install graphify (`uv tool install graphifyy`); agents query `graphify-out/` first and run `graphify update` after code changes to reduce token use.
 - **Domain at intake:** the user provides **project domain + fleet domain** only; agents derive `ACME_EMAIL` (`admin@<project-domain>` by default), all secrets, fleet URL, and push token (fetched from `/api/fleet-config`).
 - **Secrets auto-generated:** at intake Maya creates a gitignored root `.env` with strong random secrets (PostgreSQL, JWT, registry); no human writes secrets and values are never logged. Downstream agents consume them as `${VAR}` and never hardcode literals.

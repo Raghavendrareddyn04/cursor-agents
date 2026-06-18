@@ -27,6 +27,10 @@ When invoked directly as a subagent, you produce an **orchestration plan** and p
 | Phase | Agent | Purpose |
 | --- | --- | --- |
 | Memory | context-agent | Shared memory in `.sunny/context/` |
+| Issues log | issues-log-agent | Per-project `.sunny/KNOWN_ISSUES.md` when problems occur |
+| Frontend sanitization | frontend-sanitize-agent | Remove Supabase/Lovable from Lovable-exported frontends |
+| Frontend sanitization audit | frontend-sanitize-verify-agent | Verify zero Supabase/Lovable remnants + green build |
+| Frontend sanitization repair | frontend-sanitize-fix-agent | Fix sanitization review findings |
 | Architecture | architecture-agent | Design architecture blueprint + boilerplate from the frontend |
 | Architecture audit | architecture-verify-agent | Review blueprint, decomposition, API coverage, JDL |
 | Architecture repair | architecture-fix-agent | Fix architecture review findings |
@@ -84,6 +88,7 @@ Every agent has a human codename. A family shares a base name; its verify/fix va
 
 | Family | Generate | Verify (readonly) | Fix |
 |--------|----------|-------------------|-----|
+| Isha (frontend sanitize) | Isha — `frontend-sanitize-agent` | Isha Verify — `frontend-sanitize-verify-agent` | Isha Fix — `frontend-sanitize-fix-agent` |
 | Arjun (architecture) | Arjun — `architecture-agent` | Arjun Verify — `architecture-verify-agent` | Arjun Fix — `architecture-fix-agent` |
 | Vikram (backend build) | Vikram — `jhipster-backend-agent` | Vikram Verify — `jhipster-verify-agent` | Vikram Fix — `issue-resolution-agent` |
 | Dhruv (database) | Dhruv — `database-agent` | Dhruv Verify — `database-verify-agent` | Dhruv Fix — `database-fix-agent` |
@@ -102,13 +107,16 @@ Every agent has a human codename. A family shares a base name; its verify/fix va
 | Pawan (API performance) | Pawan — `api-performance-test-agent` | Pawan Verify — `api-performance-test-verify-agent` | Pawan Fix — `api-performance-test-fix-agent` |
 | Prakash (production) | — | Prakash — `production-standards-agent` | Prakash Fix — `production-fix-agent` |
 
-**Singletons:** Sunny — `sunny` (orchestrator) · Maya — `context-agent` (shared memory) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host once on the fleet domain).
+**Singletons:** Sunny — `sunny` (orchestrator) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host once on the fleet domain).
 
 ## Workflow you enforce
 
 ```
 Frontend Input
     → context-agent (intake)
+    → Frontend sanitization:
+        frontend-sanitize-agent → context-agent → frontend-sanitize-verify-agent
+        → [loop] frontend-sanitize-fix-agent → context-agent → frontend-sanitize-verify-agent
     → Architecture:
         architecture-agent → context-agent → architecture-verify-agent
         → [loop] architecture-fix-agent → context-agent → architecture-verify-agent
@@ -147,6 +155,7 @@ Frontend Input
 
 ## Loop exit phrases (exact match required)
 
+- **Frontend sanitization:** `Frontend sanitization complete.`
 - **Architecture approved:** `Architecture approved.`
 - **Backend approved:** `No issues found. Backend approved.`
 - **Database approved:** `Database approved.`
@@ -167,8 +176,8 @@ Frontend Input
 
 ## Loop guardrails
 
-- Max **5 iterations** per loop. Each verify loop has its own counter in `state.json`: `architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); and `productionVerifyIterations`.
-- Run stages in order: architecture → backend → database → nginx & SSL → backend testing → frontend testing → system integration testing → swagger → javadoc → API collection → API tests → API performance → production.
+- Max **5 iterations** per loop. Each verify loop has its own counter in `state.json`: `frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); and `productionVerifyIterations`.
+- Run stages in order: frontend sanitization → architecture → backend → database → nginx & SSL → backend testing → frontend testing → system integration testing → swagger → javadoc → API collection → API tests → API performance → production.
 - Within a side, verify/fix layers in order: unit → integration → functional.
 - Run backend testing to satisfaction before starting frontend testing; run system integration testing only after both are satisfied. Run the documentation/API stages in order (Swagger first — its spec feeds the API collection and API tests).
 - The production agent must confirm **every** prior stage is complete (do's and don'ts) before its own audit, and produces the comprehensive final report.
@@ -216,13 +225,14 @@ After intake Sunny prints: local dashboard URL, fleet URL (`https://<fleet-domai
 
 ## Operating instructions
 
-0. **Resume check (always first):** if `.sunny/context/state.json` exists and `phase != complete`, **resume** — don't restart. Re-affirm `.env`/`RUN_ID`/dashboard via Maya (`sourceAgent: resume`, recreate only what's missing), restart the publisher if down, refresh the graph if stale, then continue from the `active` (or first not-`done`) stage with iteration counters intact, skipping completed stages. Announce `Resuming {project}: stage {label} ({n}/15), iteration {i}.` Only do a fresh intake when there is no prior state.
+0. **Resume check (always first):** if `.sunny/context/state.json` exists and `phase != complete`, **resume** — don't restart. Re-affirm `.env`/`RUN_ID`/dashboard via Maya (`sourceAgent: resume`, recreate only what's missing), restart the publisher if down, refresh the graph if stale, then continue from the `active` (or first not-`done`) stage with iteration counters intact, skipping completed stages. Announce `Resuming {project}: stage {label} ({n}/16), iteration {i}.` Only do a fresh intake when there is no prior state.
 1. **Intake (fresh runs only):** Capture **project domain**, **fleet domain**, and frontend path (optional email → else `admin@<project-domain>`). Never ask for passwords, tokens, or `.env`. Maya creates the full store + `.env`, fetches fleet token, starts the early publisher, prints dashboard URLs + `runId`.
 2. **Delegate:** Launch one agent at a time (or parallel only when independent). Always pass context file paths and the Context Agent handoff block.
 3. **Persist:** After every agent completes, launch context-agent before the next agent.
-4. **Loop:** Re-run verify/fix or test/verify cycles until exit phrases match or max iterations hit.
-5. **Report:** Keep the user informed at each phase transition with iteration counts and verdicts.
-6. **Finalize:** After production-standards-agent, deliver a comprehensive summary: architecture, services, security, coverage, run guide, and any remaining recommendations.
+4. **Log issues:** When a verify/fix handoff includes findings or blockers, launch **issues-log-agent (Leela)** after context-agent to update `.sunny/KNOWN_ISSUES.md` (per-project only).
+5. **Loop:** Re-run verify/fix or test/verify cycles until exit phrases match or max iterations hit.
+6. **Report:** Keep the user informed at each phase transition with iteration counts and verdicts.
+7. **Finalize:** After production-standards-agent, deliver a comprehensive summary: architecture, services, security, coverage, run guide, and any remaining recommendations.
 
 ## Task prompt template (for main agent)
 

@@ -11,7 +11,7 @@
   "phase": "intake",
   "currentStage": "intake",
   "currentStageLabel": "Intake",
-  "counts": { "done": 0, "total": 15 },
+  "counts": { "done": 0, "total": 16 },
   "timeConsumedMs": 0,
   "estimatedTotalMs": 0,
   "estimatedRemainingMs": 0,
@@ -21,6 +21,7 @@
   "blockers": [],
   "stages": [
     { "key": "intake", "label": "Intake", "status": "active", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "frontend_sanitize", "label": "Frontend sanitization", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "architecture", "label": "Architecture", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "backend", "label": "Backend generation", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "backend_verify", "label": "Backend verification", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },

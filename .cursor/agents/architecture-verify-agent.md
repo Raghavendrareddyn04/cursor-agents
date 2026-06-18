@@ -19,7 +19,8 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 
 ## Before you start
 
-1. Read `.sunny/context/architecture-summary.md`, `.sunny/context/project-context.md`, and `.sunny/context/state.json`.
+1. Read `.sunny/context/architecture-summary.md`, `.sunny/context/frontend-sanitize-summary.md`, `.sunny/context/project-context.md`, and `.sunny/context/state.json`.
+2. Confirm `frontend-sanitize-verify-report.md` contains `Frontend sanitization complete.` — if not, block architecture approval and report the gap.
 2. If re-verifying, read the prior `.sunny/context/architecture-verify-report.md` for regression context.
 3. Inspect the actual draft JDL and boilerplate/scaffolding — do not rely only on the summary.
 4. Do **not** write to `.sunny/context/` — return structured output for the Context Agent.
@@ -57,7 +58,8 @@ Severity levels: `critical`, `high`, `medium`, `low`.
 
 ### Auth & security design
 
-- [ ] Auth model defined (JWT or OAuth2/OIDC), roles/authorities, protected routes
+- [ ] Auth model defined (JHipster JWT/OAuth2) — **no Supabase references** in blueprint, JDL, or `envKeys`
+- [ ] `SUPABASE_JWT_SECRET` and other Supabase env keys **must not** appear in the design
 - [ ] Gateway routing + CORS strategy defined (not `*` in prod)
 
 ### JDL & boilerplate

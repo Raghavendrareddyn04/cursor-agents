@@ -14,12 +14,12 @@ A complete, presentation-ready reference for **every agent** in the Sunny multi-
 - **Exit phrase** — the exact string a verify agent emits when its loop is satisfied. The orchestrator matches it literally to advance.
 - **Loop** — generate → verify → fix → re-verify, capped at **5 iterations** per loop before Sunny marks the stage `needs-attention` and continues where possible.
 
-**System totals:** 52 orchestrated agents + 2 standalone (`documentation`, `fleet-host-agent`) · 17 verify/fix loops · 17 readonly auditors.
+**System totals:** 54 orchestrated agents + 2 standalone (`documentation`, `fleet-host-agent`) · 18 verify/fix loops · 18 readonly auditors.
 
 **Pipeline order:**
 
 ```
-Architecture → Backend (JHipster) → Database → Nginx & SSL (domain + Certbot)
+Frontend sanitization → Architecture → Backend (JHipster) → Database → Nginx & SSL (domain + Certbot)
 → Backend tests → Frontend tests → System integration tests → Swagger → Javadoc
 → API collection → API tests → API performance → Production
 ```
@@ -51,9 +51,14 @@ graphify install
 - Summarizes each agent's output into structured reports, updates `state.json` (phase, counters, `lastVerdict`, `project` domain/email, `workflowStartedAt`, per-stage timing), and builds the trimmed handoff for the next agent.
 - **Owns the live progress dashboard:** at intake she seeds `.sunny/web/` (dashboard + early publisher), and after **every** handoff she rewrites `.sunny/web/progress.json` (completed/pending stages, current phase, time consumed/estimated/remaining, ETA).
 - **Bootstraps secrets:** at intake she auto-generates the root `.env` with strong random secrets (PostgreSQL password, JWT base64 secret, registry password) + `DOMAIN`/`ACME_EMAIL` from the prompt — so no human writes secrets. Idempotent (never clobbers an existing `.env`) and secret values are never logged to context, the dashboard, or chat.
-- **Pushes to the fleet board (optional):** if `CENTRAL_DASHBOARD_URL` + `CENTRAL_PUSH_TOKEN` are set, after every handoff she POSTs this run's `progress.json` to the central collector so it shows on the global dashboard. Best-effort — a failed push never blocks the run.
+- **Seeds an empty per-project** `.sunny/KNOWN_ISSUES.md` from the generic template (no issues copied from other projects).
+- **Pushes to the fleet board (optional):** if `CENTRAL_DASHBOARD_URL` + `CENTRAL_PUSH_TOKEN` are set, after every handoff she runs `python3 .sunny/push-fleet.py` so this run appears on the global dashboard. Best-effort — a failed push never blocks the run.
 - **The recovery point for resume:** she checkpoints `state.json`/`progress.json` **atomically after every handoff** (temp + rename), marking a stage `active` on entry and `done` on its exit verdict. On `sourceAgent: resume` she restores idempotently (recreates only what's missing, never regenerates secrets) so Sunny can continue an interrupted run from the exact stage it stopped at.
 - **Reads:** the previous agent's raw output + current store. **Produces:** all `.sunny/context/*.md` reports + `state.json` + `.sunny/web/progress.json`.
+
+### Leela — Issues Log Agent (`issues-log-agent`) · not readonly
+- **Per-project issues ledger.** When any stage reports findings, blockers, or runtime/deployment problems, Sunny invokes Leela after Maya's capture. She appends structured entries (symptom, root cause, fix, prevention) to **`.sunny/KNOWN_ISSUES.md`** only — generic enough to help the **next** Lovable frontend, never copied from another repo's run.
+- **Reads:** verify reports, blocker payloads, phase/stage, source agent. **Produces:** updated `.sunny/KNOWN_ISSUES.md` + a short Issues Log Report for Sunny.
 
 ---
 
@@ -82,12 +87,28 @@ Optional: Certbot email (else `admin@<project-domain>`). **Never** passwords, to
 
 ---
 
-## Stage 1 — Architecture (codename family: **Arjun**)
+## Stage 1 — Frontend sanitization (codename family: **Isha**)
+
+### Isha — Frontend Sanitize Agent (`frontend-sanitize-agent`) · not readonly
+- Runs **after intake and before architecture** on Lovable-exported frontends. Removes all Supabase and Lovable dependencies, integration folders, env vars, branding, and platform artifacts. Leaves compile-safe stubs only — JHipster JWT/API wiring is downstream work.
+- **Reads:** `project-context.md`. **Produces:** sanitized frontend + `frontend-sanitize-summary.md`.
+
+### Isha Verify — Frontend Sanitize Verify Agent (`frontend-sanitize-verify-agent`) · readonly
+- Zero-tolerance audit: no Supabase/Lovable deps, dirs, or `src/` references; no Lovable branding; `npm run build` passes.
+- **Reads:** `frontend-sanitize-summary.md`, `project-context.md`. **Exit phrase:** `Frontend sanitization complete.`
+
+### Isha Fix — Frontend Sanitize Fix Agent (`frontend-sanitize-fix-agent`) · not readonly
+- Fixes every finding from Isha Verify, then returns for re-review.
+- **Reads:** `frontend-sanitize-verify-report.md`. **Produces:** fixes + `frontend-sanitize-fix-log.md`.
+
+---
+
+## Stage 2 — Architecture (codename family: **Arjun**)
 
 ### Arjun — Architecture Agent (`architecture-agent`) · not readonly
-- Runs **first**, before any JHipster generation. Turns the frontend into a concrete **architecture blueprint and project boilerplate**: service decomposition (bounded contexts), domain model, API contract map, auth design, and a **draft JDL** + scaffolding.
+- Runs **after frontend sanitization**, before any JHipster generation. Turns the frontend into a concrete **architecture blueprint and project boilerplate**: service decomposition (bounded contexts), domain model, API contract map, auth design (JHipster JWT — not Supabase), and a **draft JDL** + scaffolding.
 - Enforces microservices + PostgreSQL + no mock data at the design level.
-- **Reads:** `project-context.md`. **Produces:** `architecture-summary.md`.
+- **Reads:** `project-context.md`, `frontend-sanitize-summary.md`. **Produces:** `architecture-summary.md`.
 
 ### Arjun Verify — Architecture Verify Agent (`architecture-verify-agent`) · readonly
 - Reviews the blueprint: decomposition soundness, **API contract coverage** (every frontend call mapped), JDL consistency, and auth design.
@@ -99,7 +120,7 @@ Optional: Certbot email (else `admin@<project-domain>`). **Never** passwords, to
 
 ---
 
-## Stages 2–3 — Backend build & verify (codename family: **Vikram**)
+## Stages 3–4 — Backend build & verify (codename family: **Vikram**)
 
 ### Vikram — JHipster Backend Agent (`jhipster-backend-agent`) · not readonly
 - Generates the complete **JHipster microservices** backend from the approved blueprint: gateway + services + service registry, PostgreSQL + Liquibase, JWT/OAuth2 + RBAC, Docker, production config. No mock/fake data.
@@ -115,7 +136,7 @@ Optional: Certbot email (else `admin@<project-domain>`). **Never** passwords, to
 
 ---
 
-## Stage 4 — Database (codename family: **Dhruv**)
+## Stage 5 — Database (codename family: **Dhruv**)
 
 ### Dhruv — Database Agent (`database-agent`) · not readonly
 - Runs after the backend is approved and before testing. **Hardens the database layer** of every service: PostgreSQL connections + HikariCP pooling, Liquibase migrations, constraints, indexes, relationships, schema standards. No mock data.
@@ -131,7 +152,7 @@ Optional: Certbot email (else `admin@<project-domain>`). **Never** passwords, to
 
 ---
 
-## Stage 5 — Nginx & SSL edge (codename family: **Naveen**)
+## Stage 6 — Nginx & SSL edge (codename family: **Naveen**)
 
 ### Naveen — Nginx & SSL Edge Agent (`nginx-agent`) · not readonly
 - Runs after the database is approved and **before** testing. Configures **Nginx** as the reverse proxy so the **frontend and gateway are reachable on the domain over HTTPS**, with **Certbot/Let's Encrypt** certificates and automatic renewal. No self-signed shortcuts in production.
@@ -148,7 +169,7 @@ Optional: Certbot email (else `admin@<project-domain>`). **Never** passwords, to
 
 ---
 
-## Stage 6 — Backend testing (three layers)
+## Stage 7 — Backend testing (three layers)
 
 Generate all three layers once, then verify/fix each layer in order: **unit → integration → functional**. Target **≥95% line and branch coverage** per layer.
 
@@ -302,6 +323,10 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 |----------|------|----------|------------------------------|
 | Sunny | `sunny` | No | — |
 | Maya | `context-agent` | No | — |
+| Leela | `issues-log-agent` | No | — |
+| Isha | `frontend-sanitize-agent` | No | — |
+| Isha Verify | `frontend-sanitize-verify-agent` | Yes | `Frontend sanitization complete.` |
+| Isha Fix | `frontend-sanitize-fix-agent` | No | — |
 | Arjun | `architecture-agent` | No | — |
 | Arjun Verify | `architecture-verify-agent` | Yes | `Architecture approved.` |
 | Arjun Fix | `architecture-fix-agent` | No | — |

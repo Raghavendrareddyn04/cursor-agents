@@ -20,7 +20,8 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 ## Before you start
 
 1. Read **every** `.sunny/context/` file — not just summaries — so you can confirm each prior stage is genuinely complete:
-   - `project-context.md`, `architecture-summary.md`, `architecture-verify-report.md`
+   - `project-context.md`, `frontend-sanitize-summary.md`, `frontend-sanitize-verify-report.md`
+   - `architecture-summary.md`, `architecture-verify-report.md`
    - `backend-summary.md`, `verify-report.md`
    - `database-summary.md`, `database-verify-report.md`
    - `nginx-summary.md`, `nginx-verify-report.md`
@@ -37,6 +38,7 @@ Before your own categories, confirm **each previous agent did what it was suppos
 
 | Stage | Required verdict | Artifact spot-check |
 | --- | --- | --- |
+| Frontend sanitization | `Frontend sanitization complete.` | no Supabase/Lovable in `src/`; build passes |
 | Architecture | `Architecture approved.` | blueprint + JDL exist |
 | Backend code | `No issues found. Backend approved.` | gateway + services + registry |
 | Database | `Database approved.` | Liquibase migrations apply on fresh PostgreSQL |

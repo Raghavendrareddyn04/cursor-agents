@@ -184,15 +184,36 @@
     function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
     function $(id) { return document.getElementById(id); }
 
+    function normalizeStages(rawStages) {
+      var list = rawStages;
+      if (!Array.isArray(list)) {
+        list = Object.entries(list || {}).map(function (entry) {
+          var key = entry[0];
+          var val = entry[1] || {};
+          return Object.assign({ key: key }, typeof val === "object" ? val : { label: String(val) });
+        });
+      }
+      return list.map(function (s) {
+        var status = s.status || "pending";
+        if (status === "done") status = "completed";
+        return Object.assign({}, s, { status: status });
+      });
+    }
+
+    function isStageDone(s) {
+      var st = s.status || "pending";
+      return st === "done" || st === "completed";
+    }
+
     function render() {
       if (!data) return;
       var now = Date.now();
       var sinceFetch = performance.now() - fetchedAt;
 
-      var stages = Array.isArray(data.stages) ? data.stages : [];
-      var total = (data.counts && data.counts.total) || stages.length || 0;
+      var stages = normalizeStages(data.stages);
+      var total = (data.counts && data.counts.total) || stages.length || 16;
       var done = (data.counts && data.counts.done);
-      if (done == null) done = stages.filter(function (s) { return s.status === "done"; }).length;
+      if (done == null) done = stages.filter(isStageDone).length;
       var pct = total ? Math.round((done / total) * 100) : 0;
 
       // Project + status
@@ -245,10 +266,11 @@
           var durTxt = (st === "pending") ? "—" : fmtDur(dur);
           var iters = (s.iterations != null && s.iterations > 0) ? s.iterations : "—";
           var rowCls = st === "active" ? " class='row-active'" : (st === "blocked" ? " class='row-blocked'" : (st === "needs-attention" ? " class='row-needs-attention'" : ""));
+          var displayStatus = st === "completed" ? "completed" : st;
           return "<tr" + rowCls + ">"
             + "<td class='num'>" + (i + 1) + "</td>"
-            + "<td><span class='dot " + st + "'></span>" + esc(s.label || s.key) + "</td>"
-            + "<td class='st " + st + "'>" + st + "</td>"
+            + "<td><span class='dot " + (st === "completed" ? "done" : st) + "'></span>" + esc(s.label || s.key) + "</td>"
+            + "<td class='st " + (st === "completed" ? "done" : st) + "'>" + displayStatus + "</td>"
             + "<td class='num'>" + iters + "</td>"
             + "<td class='num'>" + durTxt + "</td>"
             + "</tr>";
@@ -301,7 +323,18 @@
       // Cache-bust so proxies never serve a stale snapshot.
       fetch("progress.json?_=" + Date.now(), { cache: "no-store" })
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-        .then(function (json) { data = json; fetchedAt = performance.now(); lastError = null; render(); })
+        .then(function (json) {
+          data = json;
+          fetchedAt = performance.now();
+          lastError = null;
+          try {
+            render();
+          } catch (renderErr) {
+            console.error(renderErr);
+            $("stageLine").innerHTML = "<span class='err'>Dashboard render error: " + esc(renderErr.message || renderErr) + "</span>";
+            $("statusPill").textContent = "render error";
+          }
+        })
         .catch(function (e) {
           lastError = e;
           if (!data) {
@@ -309,7 +342,7 @@
               + "<span class='muted'>Make sure the page is served from the same folder as progress.json (the publisher serves both).</span>";
             $("statusPill").textContent = "no feed";
           }
-          render();
+          try { render(); } catch (ignored) {}
         });
     }
 

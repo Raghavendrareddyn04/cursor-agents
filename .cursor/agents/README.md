@@ -25,56 +25,59 @@ These constraints are enforced by every relevant agent:
 |---|-------|------|------|----------|
 | 1 | **Sunny** (Orchestrator) | `sunny.md` + `../rules/sunny-orchestrator.mdc` | Coordinates all agents, runs loops, enforces gates | No |
 | 2 | **Context Agent** | `context-agent.md` | Shared memory; persists summaries to `.sunny/context/` | No |
-| 3 | **Architecture Agent** | `architecture-agent.md` | Designs architecture blueprint + boilerplate from the frontend | No |
-| 4 | **Architecture Verify Agent** | `architecture-verify-agent.md` | Reviews blueprint, decomposition, API coverage, JDL | Yes |
-| 5 | **Architecture Fix Agent** | `architecture-fix-agent.md` | Fixes architecture review findings | No |
-| 6 | **JHipster Backend Agent** | `jhipster-backend-agent.md` | Generates the microservices backend | No |
-| 7 | **JHipster Verify Agent** | `jhipster-verify-agent.md` | Audits backend (API, security, architecture, DB) | Yes |
-| 8 | **Issue Resolution Agent** | `issue-resolution-agent.md` | Fixes issues found by the verify agent | No |
-| 9 | **Database Agent** | `database-agent.md` | Hardens DB connections, schema, migrations, standards | No |
-| 10 | **Database Verify Agent** | `database-verify-agent.md` | Audits DB layer (schema, migrations, no mock data) | Yes |
-| 11 | **Database Fix Agent** | `database-fix-agent.md` | Fixes database review findings | No |
-| 12 | **Nginx & SSL Edge Agent** | `nginx-agent.md` | Reverse proxy + domain + Certbot/Let's Encrypt | No |
-| 13 | **Nginx Verify Agent** | `nginx-verify-agent.md` | Audits edge proxy, HTTPS, cert renewal | Yes |
-| 14 | **Nginx Fix Agent** | `nginx-fix-agent.md` | Fixes nginx/SSL findings | No |
-| 15 | **Backend Unit Test Agent** | `backend-unit-test-agent.md` | Isolated unit tests (services, mappers, validators) | No |
-| 16 | **Backend Unit Test Verify Agent** | `backend-unit-test-verify-agent.md` | Verifies backend unit-layer coverage/quality | Yes |
-| 17 | **Backend Unit Test Fix Agent** | `backend-unit-test-fix-agent.md` | Closes backend unit-layer gaps | No |
-| 18 | **Backend Integration Test Agent** | `backend-integration-test-agent.md` | Repository/DB tests on Testcontainers PostgreSQL | No |
-| 19 | **Backend Integration Test Verify Agent** | `backend-integration-test-verify-agent.md` | Verifies backend integration-layer coverage/quality | Yes |
-| 20 | **Backend Integration Test Fix Agent** | `backend-integration-test-fix-agent.md` | Closes backend integration-layer gaps | No |
-| 21 | **Backend Functional Test Agent** | `backend-functional-test-agent.md` | REST/API + gateway HTTP contract tests | No |
-| 22 | **Backend Functional Test Verify Agent** | `backend-functional-test-verify-agent.md` | Verifies backend functional-layer coverage/quality | Yes |
-| 23 | **Backend Functional Test Fix Agent** | `backend-functional-test-fix-agent.md` | Closes backend functional-layer gaps | No |
-| 24 | **Frontend Unit Test Agent** | `frontend-unit-test-agent.md` | Isolated unit tests (utils, hooks, stores) | No |
-| 25 | **Frontend Unit Test Verify Agent** | `frontend-unit-test-verify-agent.md` | Verifies frontend unit-layer coverage/quality | Yes |
-| 26 | **Frontend Unit Test Fix Agent** | `frontend-unit-test-fix-agent.md` | Closes frontend unit-layer gaps | No |
-| 27 | **Frontend Integration Test Agent** | `frontend-integration-test-agent.md` | Component/page tests with MSW, routing, state | No |
-| 28 | **Frontend Integration Test Verify Agent** | `frontend-integration-test-verify-agent.md` | Verifies frontend component-layer coverage/quality | Yes |
-| 29 | **Frontend Integration Test Fix Agent** | `frontend-integration-test-fix-agent.md` | Closes frontend component-layer gaps | No |
-| 30 | **Frontend Functional Test Agent** | `frontend-functional-test-agent.md` | E2E user journeys (Playwright) | No |
-| 31 | **Frontend Functional Test Verify Agent** | `frontend-functional-test-verify-agent.md` | Verifies frontend E2E journey coverage | Yes |
-| 32 | **Frontend Functional Test Fix Agent** | `frontend-functional-test-fix-agent.md` | Closes frontend E2E gaps | No |
-| 33 | **System Integration Test Agent** | `system-integration-test-agent.md` | Collective full-stack tests (frontend + backend + PostgreSQL together) | No |
-| 34 | **System Integration Test Verify Agent** | `system-integration-test-verify-agent.md` | Verifies cross-tier journey coverage on the real running stack | Yes |
-| 35 | **System Integration Test Fix Agent** | `system-integration-test-fix-agent.md` | Closes collective full-stack testing gaps | No |
-| 36 | **Swagger Agent** | `swagger-agent.md` | OpenAPI/Swagger docs for every endpoint (springdoc) | No |
-| 37 | **Swagger Verify Agent** | `swagger-verify-agent.md` | Verifies spec completeness and accuracy | Yes |
-| 38 | **Swagger Fix Agent** | `swagger-fix-agent.md` | Closes Swagger documentation gaps | No |
-| 39 | **Javadoc Agent** | `javadoc-agent.md` | Javadoc for every public Java API; failOnWarnings build | No |
-| 40 | **Javadoc Verify Agent** | `javadoc-verify-agent.md` | Verifies Javadoc coverage and clean build | Yes |
-| 41 | **Javadoc Fix Agent** | `javadoc-fix-agent.md` | Closes Javadoc gaps | No |
-| 42 | **API Collection Agent** | `api-collection-agent.md` | Postman collection + environments from the spec (Newman CI) | No |
-| 43 | **API Collection Verify Agent** | `api-collection-verify-agent.md` | Verifies collection coverage and green Newman run | Yes |
-| 44 | **API Collection Fix Agent** | `api-collection-fix-agent.md` | Closes API collection gaps | No |
-| 45 | **API Test Agent** | `api-test-agent.md` | Exercises every endpoint; asserts correct/appropriate status | No |
-| 46 | **API Test Verify Agent** | `api-test-verify-agent.md` | Verifies every endpoint returns its correct status | Yes |
-| 47 | **API Test Fix Agent** | `api-test-fix-agent.md` | Fixes wrong-status endpoints + missing assertions | No |
-| 48 | **API Performance Test Agent** | `api-performance-test-agent.md` | Load test at 1/10/20/30 concurrency; capture metrics | No |
-| 49 | **API Performance Test Verify Agent** | `api-performance-test-verify-agent.md` | Verifies all levels covered + thresholds met | Yes |
-| 50 | **API Performance Test Fix Agent** | `api-performance-test-fix-agent.md` | Remediates performance breaches | No |
-| 51 | **Production Standards Agent** | `production-standards-agent.md` | Audits all prior outputs + final security/readiness audit + comprehensive report | Yes |
-| 52 | **Production Fix Agent** | `production-fix-agent.md` | Remediates production audit findings | No |
+| 3 | **Frontend Sanitize Agent** | `frontend-sanitize-agent.md` | Removes Supabase/Lovable from Lovable-exported frontends | No |
+| 4 | **Frontend Sanitize Verify Agent** | `frontend-sanitize-verify-agent.md` | Audits zero Supabase/Lovable remnants + green build | Yes |
+| 5 | **Frontend Sanitize Fix Agent** | `frontend-sanitize-fix-agent.md` | Fixes frontend sanitization findings | No |
+| 6 | **Architecture Agent** | `architecture-agent.md` | Designs architecture blueprint + boilerplate from the frontend | No |
+| 7 | **Architecture Verify Agent** | `architecture-verify-agent.md` | Reviews blueprint, decomposition, API coverage, JDL | Yes |
+| 8 | **Architecture Fix Agent** | `architecture-fix-agent.md` | Fixes architecture review findings | No |
+| 9 | **JHipster Backend Agent** | `jhipster-backend-agent.md` | Generates the microservices backend | No |
+| 10 | **JHipster Verify Agent** | `jhipster-verify-agent.md` | Audits backend (API, security, architecture, DB) | Yes |
+| 11 | **Issue Resolution Agent** | `issue-resolution-agent.md` | Fixes issues found by the verify agent | No |
+| 12 | **Database Agent** | `database-agent.md` | Hardens DB connections, schema, migrations, standards | No |
+| 13 | **Database Verify Agent** | `database-verify-agent.md` | Audits DB layer (schema, migrations, no mock data) | Yes |
+| 14 | **Database Fix Agent** | `database-fix-agent.md` | Fixes database review findings | No |
+| 15 | **Nginx & SSL Edge Agent** | `nginx-agent.md` | Reverse proxy + domain + Certbot/Let's Encrypt | No |
+| 16 | **Nginx Verify Agent** | `nginx-verify-agent.md` | Audits edge proxy, HTTPS, cert renewal | Yes |
+| 17 | **Nginx Fix Agent** | `nginx-fix-agent.md` | Fixes nginx/SSL findings | No |
+| 18 | **Backend Unit Test Agent** | `backend-unit-test-agent.md` | Isolated unit tests (services, mappers, validators) | No |
+| 19 | **Backend Unit Test Verify Agent** | `backend-unit-test-verify-agent.md` | Verifies backend unit-layer coverage/quality | Yes |
+| 20 | **Backend Unit Test Fix Agent** | `backend-unit-test-fix-agent.md` | Closes backend unit-layer gaps | No |
+| 21 | **Backend Integration Test Agent** | `backend-integration-test-agent.md` | Repository/DB tests on Testcontainers PostgreSQL | No |
+| 22 | **Backend Integration Test Verify Agent** | `backend-integration-test-verify-agent.md` | Verifies backend integration-layer coverage/quality | Yes |
+| 23 | **Backend Integration Test Fix Agent** | `backend-integration-test-fix-agent.md` | Closes backend integration-layer gaps | No |
+| 24 | **Backend Functional Test Agent** | `backend-functional-test-agent.md` | REST/API + gateway HTTP contract tests | No |
+| 25 | **Backend Functional Test Verify Agent** | `backend-functional-test-verify-agent.md` | Verifies backend functional-layer coverage/quality | Yes |
+| 26 | **Backend Functional Test Fix Agent** | `backend-functional-test-fix-agent.md` | Closes backend functional-layer gaps | No |
+| 27 | **Frontend Unit Test Agent** | `frontend-unit-test-agent.md` | Isolated unit tests (utils, hooks, stores) | No |
+| 28 | **Frontend Unit Test Verify Agent** | `frontend-unit-test-verify-agent.md` | Verifies frontend unit-layer coverage/quality | Yes |
+| 29 | **Frontend Unit Test Fix Agent** | `frontend-unit-test-fix-agent.md` | Closes frontend unit-layer gaps | No |
+| 30 | **Frontend Integration Test Agent** | `frontend-integration-test-agent.md` | Component/page tests with MSW, routing, state | No |
+| 31 | **Frontend Integration Test Verify Agent** | `frontend-integration-test-verify-agent.md` | Verifies frontend component-layer coverage/quality | Yes |
+| 32 | **Frontend Integration Test Fix Agent** | `frontend-integration-test-fix-agent.md` | Closes frontend component-layer gaps | No |
+| 33 | **Frontend Functional Test Agent** | `frontend-functional-test-agent.md` | E2E user journeys (Playwright) | No |
+| 34 | **Frontend Functional Test Verify Agent** | `frontend-functional-test-verify-agent.md` | Verifies frontend E2E journey coverage | Yes |
+| 35 | **Frontend Functional Test Fix Agent** | `frontend-functional-test-fix-agent.md` | Closes frontend E2E gaps | No |
+| 36 | **System Integration Test Agent** | `system-integration-test-agent.md` | Collective full-stack tests (frontend + backend + PostgreSQL together) | No |
+| 37 | **System Integration Test Verify Agent** | `system-integration-test-verify-agent.md` | Verifies cross-tier journey coverage on the real running stack | Yes |
+| 38 | **System Integration Test Fix Agent** | `system-integration-test-fix-agent.md` | Closes collective full-stack testing gaps | No |
+| 39 | **Swagger Agent** | `swagger-agent.md` | OpenAPI/Swagger docs for every endpoint (springdoc) | No |
+| 40 | **Swagger Verify Agent** | `swagger-verify-agent.md` | Verifies spec completeness and accuracy | Yes |
+| 41 | **Swagger Fix Agent** | `swagger-fix-agent.md` | Closes Swagger documentation gaps | No |
+| 42 | **Javadoc Agent** | `javadoc-agent.md` | Javadoc for every public Java API; failOnWarnings build | No |
+| 43 | **Javadoc Verify Agent** | `javadoc-verify-agent.md` | Verifies Javadoc coverage and clean build | Yes |
+| 44 | **Javadoc Fix Agent** | `javadoc-fix-agent.md` | Closes Javadoc gaps | No |
+| 45 | **API Collection Agent** | `api-collection-agent.md` | Postman collection + environments from the spec (Newman CI) | No |
+| 46 | **API Collection Verify Agent** | `api-collection-verify-agent.md` | Verifies collection coverage and green Newman run | Yes |
+| 47 | **API Collection Fix Agent** | `api-collection-fix-agent.md` | Closes API collection gaps | No |
+| 48 | **API Test Agent** | `api-test-agent.md` | Exercises every endpoint; asserts correct/appropriate status | No |
+| 49 | **API Test Verify Agent** | `api-test-verify-agent.md` | Verifies every endpoint returns its correct status | Yes |
+| 50 | **API Test Fix Agent** | `api-test-fix-agent.md` | Fixes wrong-status endpoints + missing assertions | No |
+| 51 | **API Performance Test Agent** | `api-performance-test-agent.md` | Load test at 1/10/20/30 concurrency; capture metrics | No |
+| 52 | **API Performance Test Verify Agent** | `api-performance-test-verify-agent.md` | Verifies all levels covered + thresholds met | Yes |
+| 53 | **API Performance Test Fix Agent** | `api-performance-test-fix-agent.md` | Remediates performance breaches | No |
+| 54 | **Production Standards Agent** | `production-standards-agent.md` | Audits all prior outputs + final security/readiness audit + comprehensive report | Yes |
+| 55 | **Production Fix Agent** | `production-fix-agent.md` | Remediates production audit findings | No |
 
 ---
 
@@ -84,6 +87,7 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 
 | Family | Generate | Verify (readonly) | Fix |
 |--------|----------|-------------------|-----|
+| Isha (frontend sanitize) | Isha — `frontend-sanitize-agent` | Isha Verify — `frontend-sanitize-verify-agent` | Isha Fix — `frontend-sanitize-fix-agent` |
 | Arjun (architecture) | Arjun — `architecture-agent` | Arjun Verify — `architecture-verify-agent` | Arjun Fix — `architecture-fix-agent` |
 | Vikram (backend build) | Vikram — `jhipster-backend-agent` | Vikram Verify — `jhipster-verify-agent` | Vikram Fix — `issue-resolution-agent` |
 | Dhruv (database) | Dhruv — `database-agent` | Dhruv Verify — `database-verify-agent` | Dhruv Fix — `database-fix-agent` |

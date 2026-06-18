@@ -39,7 +39,7 @@ The pipeline is long-running, so it must **never lose its place**. All durable s
    4. **Confirm the graph is current:** if `graphUpdatedAt` is stale or `graphify-out/` is missing, run `graphify update <project-root>` (or `graphify .` to bootstrap) before launching the next agent.
    5. **Find the resume point:** the current stage is the one marked `active` in `stages[]` (or the first non-`done` stage). Re-enter that stage's phase loop and **re-run its last in-flight agent** (idempotent, so safe) before continuing; **skip every stage already marked `done`.**
    6. **Preserve iteration counters** from `state.json` so loop caps still apply across resumes (a run can't dodge its cap by restarting).
-   7. **Announce:** `Resuming {project}: stage {label} ({n}/15), iteration {i}.` Then continue the phase machine exactly as a normal run.
+   7. **Announce:** `Resuming {project}: stage {label} ({n}/16), iteration {i}.` Then continue the phase machine exactly as a normal run.
 
 > Resume is **safe to repeat**: if a resumed run is interrupted again, the next invocation picks up from the new checkpoint. Caps and blockers carry forward, so resuming never causes infinite loops or lost "action required" asks.
 
@@ -108,6 +108,10 @@ So the answer to "do they get blocked?": **no for internal secrets** (the agent 
 | Agent | subagent_type / file | readonly |
 | --- | --- | --- |
 | Context Agent | `context-agent` | false |
+| Issues Log Agent | `issues-log-agent` | false |
+| Frontend Sanitize Agent | `frontend-sanitize-agent` | false |
+| Frontend Sanitize Verify Agent | `frontend-sanitize-verify-agent` | true |
+| Frontend Sanitize Fix Agent | `frontend-sanitize-fix-agent` | false |
 | Architecture Agent | `architecture-agent` | false |
 | Architecture Verify Agent | `architecture-verify-agent` | true |
 | Architecture Fix Agent | `architecture-fix-agent` | false |
@@ -166,6 +170,7 @@ Each agent has a human codename (a family base name + `Verify`/`Fix`). Refer to 
 
 | Family | Generate | Verify (readonly) | Fix |
 |--------|----------|-------------------|-----|
+| Isha (frontend sanitize) | Isha — `frontend-sanitize-agent` | Isha Verify — `frontend-sanitize-verify-agent` | Isha Fix — `frontend-sanitize-fix-agent` |
 | Arjun (architecture) | Arjun — `architecture-agent` | Arjun Verify — `architecture-verify-agent` | Arjun Fix — `architecture-fix-agent` |
 | Vikram (backend build) | Vikram — `jhipster-backend-agent` | Vikram Verify — `jhipster-verify-agent` | Vikram Fix — `issue-resolution-agent` |
 | Dhruv (database) | Dhruv — `database-agent` | Dhruv Verify — `database-verify-agent` | Dhruv Fix — `database-fix-agent` |
@@ -185,7 +190,7 @@ Each agent has a human codename (a family base name + `Verify`/`Fix`). Refer to 
 | Prakash (production) | — | Prakash — `production-standards-agent` | Prakash Fix — `production-fix-agent` |
 | Hari (fleet host, standalone) | Hari — `fleet-host-agent` | — | — |
 
-**Singletons:** Sunny — `sunny` (orchestrator) · Maya — `context-agent` (shared memory) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (orchestrator) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 **Fleet host (Hari):** the global/fleet dashboard is a separate, run-once deployment. On the host that owns the **fleet domain**, invoke **Hari** to stand up the central collector (`.cursor/central/`) with TLS, so all worker VPSs can push to one board at `https://<fleet-domain>/`. Hari is **not** part of the per-project pipeline and does not use the Context Agent. Worker runs only need to be given the fleet domain at kickoff; Maya fetches the push token from `/api/fleet-config` automatically (and retries if Hari has not deployed yet).
 
@@ -199,6 +204,9 @@ Frontend Input → Sunny
        resume from the active/first-not-done stage (skip done stages, keep counters)
      else ↓ fresh run
   → context-agent (intake)
+  → Frontend sanitization (Lovable/Supabase removal):
+      frontend-sanitize-agent → context-agent → frontend-sanitize-verify-agent
+      → [loop if not complete] frontend-sanitize-fix-agent → context-agent → frontend-sanitize-verify-agent
   → Architecture:
       architecture-agent → context-agent → architecture-verify-agent
       → [loop if not approved] architecture-fix-agent → context-agent → architecture-verify-agent
@@ -252,6 +260,16 @@ Frontend Input → Sunny
   → Final Approval
 ```
 
+## Issues logging (Leela)
+
+Whenever a stage reports **actionable problems** (verify findings, blockers, `needs-attention`, deployment/runtime failures), launch **issues-log-agent** **after** context-agent capture and **before** the fix agent (or before continuing if capped):
+
+1. Pass the verify report findings, blocker list, phase/stage, and source agent slug.
+2. Leela appends to `.sunny/KNOWN_ISSUES.md` only (per-project, generic prevention — no copied issues from other repos).
+3. If Leela returns `No new issues to log.`, skip — do not loop.
+
+Do **not** invoke Leela on clean verify exits with zero findings.
+
 ## Phase 0 — Intake
 
 1. Analyze the frontend: API calls, models, auth, routes, requirements.
@@ -261,8 +279,9 @@ Frontend Input → Sunny
    - *(optional)* **Certbot email** — if omitted, agents use `admin@<project-domain>`.
    Pass `project.name`, `domain`, `fleetDomain`, and `acmeEmail` (if given) to context-agent. Maya derives everything else: `.env` secrets, `RUN_ID`, `CENTRAL_DASHBOARD_URL`, `CENTRAL_PUSH_TOKEN` (fetched from `GET https://<fleet-domain>/api/fleet-config`), local dashboard URL, early publisher, and fleet pushes.
 3. Launch **context-agent** with `sourceAgent: intake`, frontend path, requirements, derived domain model, and the deployment inputs. Maya writes `project-context.md` (Deployment & domain section), initializes `state.json` (with `project`, `workflowStartedAt`, seeded `stages[]`), seeds the dashboard bundle in `.sunny/web/`, and **auto-generates the root `.env` with strong secrets** (PostgreSQL password, JWT base64 secret, registry password) plus `DOMAIN`/`ACME_EMAIL` from intake — no human writes secrets. Maya is idempotent: an existing `.env` is never clobbered; only missing keys/secrets are added. Secret values are never echoed to chat, context, or the dashboard.
-4. Confirm `.sunny/context/project-context.md`, `state.json`, `.sunny/web/progress.json`, and the root `.env` (gitignored, secrets generated) exist before proceeding.
-5. **Start the early progress publisher** so the run is web-visible from agent #1:
+4. Confirm `.sunny/context/project-context.md`, `state.json`, `.sunny/web/progress.json`, `.sunny/KNOWN_ISSUES.md`, `.sunny/push-fleet.py`, and the root `.env` (gitignored, secrets generated) exist before proceeding.
+5. **Fleet health check (non-blocking):** if `fleetDomain` is set, `GET https://<fleetDomain>/api/fleet-config` should respond. If it times out or returns 5xx, warn the user to deploy Hari (`fleet-host-agent`) on the fleet host before expecting fleet dashboard updates — the run continues with local dashboard only.
+6. **Start the early progress publisher** so the run is web-visible from agent #1:
    ```bash
    docker compose -f .sunny/web/docker-compose.yml up -d   # or: PROGRESS_PORT=9090 docker compose -f .sunny/web/docker-compose.yml up -d
    # no-Docker fallback: python -m http.server 8787 --directory .sunny/web
@@ -272,14 +291,33 @@ Frontend Input → Sunny
    - **Local (after Nginx):** `https://<domain>/agentprogress.html`
    - **Fleet (all VPSs):** if `CENTRAL_DASHBOARD_URL` is set, print `https://<central-domain>/` and this run's **`runId`** (from `state.json`) so the user can find this card on the global board.
 
+## Phase 0.25 — Frontend sanitization loop
+
+Runs **after intake** and **before architecture**. Strips all Supabase and Lovable artifacts from Lovable-exported frontends (deps, integrations, branding, env vars). Leaves compile-safe stubs only — full JHipster JWT/API wiring is architecture/backend work.
+
+**Exit phrase (must match exactly):** `Frontend sanitization complete.`
+
+```
+1. Launch frontend-sanitize-agent with handoff (project-context.md, frontend path)
+2. Launch context-agent to persist frontend-sanitize-summary.md
+repeat:
+  3. Launch frontend-sanitize-verify-agent (readonly) with context handoff
+  4. Launch context-agent to persist frontend-sanitize-verify-report.md
+  5. Read state.json — if lastVerdict == exit phrase → break to Phase 0.5
+  6. If frontendSanitizeVerifyIterations >= maxIterations (5) → cap reached: mark stage needs-attention, surface notifications (local + fleet), continue to next stage (set blocked + stop only if a hard dependency makes continuing impossible)
+  7. Launch frontend-sanitize-fix-agent with the verify findings
+  8. Launch context-agent to append frontend-sanitize-fix-log.md
+  9. goto repeat
+```
+
 ## Phase 0.5 — Architecture loop
 
-Designs the architecture blueprint + boilerplate before any JHipster generation.
+Designs the architecture blueprint + boilerplate before any JHipster generation. **Prerequisite:** frontend sanitization exit phrase recorded.
 
 **Exit phrase (must match exactly):** `Architecture approved.`
 
 ```
-1. Launch architecture-agent with handoff (project-context.md)
+1. Launch architecture-agent with handoff (project-context.md, frontend-sanitize-summary.md)
 2. Launch context-agent to persist architecture-summary.md
 repeat:
   3. Launch architecture-verify-agent (readonly) with context handoff

@@ -31,6 +31,9 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 ```
 .sunny/context/
 ├── project-context.md             # Master project context (frontend, domain, requirements)
+├── frontend-sanitize-summary.md   # Frontend sanitization output (Isha)
+├── frontend-sanitize-verify-report.md  # Latest Frontend Sanitize Verify report
+├── frontend-sanitize-fix-log.md   # History of frontend sanitization fixes
 ├── architecture-summary.md        # Architecture blueprint + boilerplate (Architecture Agent)
 ├── architecture-verify-report.md  # Latest Architecture Verify report
 ├── architecture-fix-log.md        # History of architecture fixes
@@ -104,7 +107,8 @@ Always read and update `state.json` on every invocation:
   "localDashboardUrl": "https://<domain>/agentprogress.html (or early http://<ip>:8787/...)",
   "centralUrl": "https://<central-domain> (fleet collector, or empty if not configured)",
   "workflowStartedAt": "ISO-8601 timestamp set once at intake",
-  "phase": "intake | architecture | architecture_verify | architecture_fix | backend | backend_verify | issue_resolution | database | database_verify | database_fix | nginx | nginx_verify | nginx_fix | testing_backend | testing_frontend | testing_system | swagger | javadoc | api_collection | api_testing | api_performance | production | production_fix | complete | blocked",
+  "phase": "intake | frontend_sanitize | frontend_sanitize_verify | frontend_sanitize_fix | architecture | architecture_verify | architecture_fix | backend | backend_verify | issue_resolution | database | database_verify | database_fix | nginx | nginx_verify | nginx_fix | testing_backend | testing_frontend | testing_system | swagger | javadoc | api_collection | api_testing | api_performance | production | production_fix | complete | blocked",
+  "frontendSanitizeVerifyIterations": 0,
   "architectureVerifyIterations": 0,
   "backendVerifyIterations": 0,
   "databaseVerifyIterations": 0,
@@ -146,7 +150,9 @@ Always read and update `state.json` on every invocation:
 - **Counters persist across resumes.** Never reset iteration counters on resume — they carry the loop caps forward so a restart can't dodge a cap or loop forever.
 - **Idempotent restore.** On `sourceAgent: resume`, do **not** re-initialize: recreate only what is missing (`.env` keys, `RUN_ID`, the `.sunny/web/` bundle, fleet token), never regenerate existing secrets or overwrite summaries. Increment `resumeCount`, set `lastAgent`, refresh `progress.json`, and resume fleet pushes.
 
-`stages[]` is the dashboard's source of truth (15 entries, fixed order). Seed it at intake from the **dashboard stage map** below; each entry tracks `status`, `startedAt`/`endedAt`/`durationMs`, `iterations`, and a default `estimateMin`. The progress dashboard (`.sunny/web/progress.json`) is derived from `stages[]` + `workflowStartedAt` (see "Progress dashboard" below).
+`stages[]` is the dashboard's source of truth (16 entries, fixed order). Seed it at intake from the **dashboard stage map** below; each entry tracks `status`, `startedAt`/`endedAt`/`durationMs`, `iterations`, and a default `estimateMin`. The progress dashboard (`.sunny/web/progress.json`) is derived from `stages[]` + `workflowStartedAt` (see "Progress dashboard" below).
+
+**progress.json vs state.json status strings:** in `progress.json`, finished stages use `status: "completed"` (never `"done"`). In `state.json.stages[]`, `"done"` is acceptable. Always write `progress.json.stages` as a **JSON array**, never an object.
 
 **Graphify freshness:** after each capture from a code-changing agent, set `graphUpdatedAt` to confirm the agent ran `graphify update <project-root>`. If it was skipped, leave `graphUpdatedAt` stale, flag it in the handoff, and tell Sunny to run `graphify update` before the next agent.
 
@@ -155,6 +161,10 @@ Always read and update `state.json` on every invocation:
 | After agent | Set phase to |
 | --- | --- |
 | Initial intake | `intake` |
+| frontend-sanitize-agent | `frontend_sanitize` |
+| frontend-sanitize-verify-agent (not complete) | `frontend_sanitize_verify` |
+| frontend-sanitize-fix-agent | `frontend_sanitize_fix` |
+| frontend-sanitize-verify-agent (complete) | `architecture` |
 | architecture-agent | `architecture` |
 | architecture-verify-agent (not approved) | `architecture_verify` |
 | architecture-fix-agent | `architecture_fix` |
@@ -211,6 +221,7 @@ Always read and update `state.json` on every invocation:
 `{layer}` is one of `unit`, `integration`, `functional`. Within a side, the three layers are verified in order (unit → integration → functional); the side only advances when the functional layer is satisfied **and** the unit and integration layers were already satisfied.
 
 Increment the matching counter after each verify run:
+- `frontendSanitizeVerifyIterations` after each frontend-sanitize-verify-agent run.
 - `architectureVerifyIterations` after each architecture-verify-agent run.
 - `backendVerifyIterations` after each jhipster-verify-agent run.
 - `databaseVerifyIterations` after each database-verify-agent run.
@@ -225,27 +236,28 @@ Increment the matching counter after each verify run:
 
 You are the **single writer** of the live progress dashboard. It must be web-visible from the very first agent and stay accurate to the end. It is a read-only static artifact under `.sunny/web/` — it never touches the generated backend.
 
-### Dashboard stage map (fixed order, 15 stages)
+### Dashboard stage map (fixed order, 16 stages)
 
 Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from this table at intake (all `pending` except `intake` = `active`). Estimates are starting defaults in minutes; the dashboard recalibrates from actuals.
 
 | # | stage `key` | label | phases that map to this stage | `estimateMin` |
 |---|-------------|-------|-------------------------------|---------------|
 | 1 | `intake` | Intake | `intake` | 2 |
-| 2 | `architecture` | Architecture | `architecture`, `architecture_verify`, `architecture_fix` | 15 |
-| 3 | `backend` | Backend generation | `backend` | 20 |
-| 4 | `backend_verify` | Backend verification | `backend_verify`, `issue_resolution` | 15 |
-| 5 | `database` | Database | `database`, `database_verify`, `database_fix` | 15 |
-| 6 | `nginx` | Nginx & SSL edge | `nginx`, `nginx_verify`, `nginx_fix` | 15 |
-| 7 | `testing_backend` | Backend testing | `testing_backend` | 40 |
-| 8 | `testing_frontend` | Frontend testing | `testing_frontend` | 40 |
-| 9 | `testing_system` | System integration testing | `testing_system` | 25 |
-| 10 | `swagger` | Swagger / OpenAPI | `swagger` | 12 |
-| 11 | `javadoc` | Javadoc | `javadoc` | 10 |
-| 12 | `api_collection` | API collection | `api_collection` | 12 |
-| 13 | `api_testing` | API tests | `api_testing` | 15 |
-| 14 | `api_performance` | API performance | `api_performance` | 20 |
-| 15 | `production` | Production | `production`, `production_fix` | 20 |
+| 2 | `frontend_sanitize` | Frontend sanitization | `frontend_sanitize`, `frontend_sanitize_verify`, `frontend_sanitize_fix` | 15 |
+| 3 | `architecture` | Architecture | `architecture`, `architecture_verify`, `architecture_fix` | 15 |
+| 4 | `backend` | Backend generation | `backend` | 20 |
+| 5 | `backend_verify` | Backend verification | `backend_verify`, `issue_resolution` | 15 |
+| 6 | `database` | Database | `database`, `database_verify`, `database_fix` | 15 |
+| 7 | `nginx` | Nginx & SSL edge | `nginx`, `nginx_verify`, `nginx_fix` | 15 |
+| 8 | `testing_backend` | Backend testing | `testing_backend` | 40 |
+| 9 | `testing_frontend` | Frontend testing | `testing_frontend` | 40 |
+| 10 | `testing_system` | System integration testing | `testing_system` | 25 |
+| 11 | `swagger` | Swagger / OpenAPI | `swagger` | 12 |
+| 12 | `javadoc` | Javadoc | `javadoc` | 10 |
+| 13 | `api_collection` | API collection | `api_collection` | 12 |
+| 14 | `api_testing` | API tests | `api_testing` | 15 |
+| 15 | `api_performance` | API performance | `api_performance` | 20 |
+| 16 | `production` | Production | `production`, `production_fix` | 20 |
 
 > Note `backend` and `backend_verify` are **separate** dashboard stages even though both live in `state.json.phase` family; map `issue_resolution` to `backend_verify`. The `complete` phase marks `production` done. Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only.
 
@@ -262,7 +274,7 @@ Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from thi
    - `pace = doneActualMin / doneEstimateMin` (use `1.0` until at least one stage is done; clamp to `[0.5, 3]`)
    - `remainingMin = (Σ estimateMin of pending + active stages) * pace`
    - `estimatedRemainingMs = remainingMin * 60000`; `estimatedTotalMs = timeConsumedMs + estimatedRemainingMs`; `eta = now + estimatedRemainingMs`
-4. Write `progress.json` with: `runId`, `project`, `vps`, `localDashboardUrl`, `generatedAt = now`, `workflowStartedAt`, `status` (`running`/`complete`/`blocked`/`needs-attention`), `phase`, `currentStage`/`currentStageLabel`, `counts {done,total:15}`, `timeConsumedMs`, `estimatedTotalMs`, `estimatedRemainingMs`, `eta`, `viewUrl`, `actionRequired` (the `needs-input` items — `key,stage,message,howTo`), `blockers`, and `stages[]` (the dashboard view: `key,label,status,startedAt,endedAt,durationMs,iterations,verdict`).
+4. Write `progress.json` with: `runId`, `project` (include `domain`), `vps`, `localDashboardUrl`, `generatedAt = now`, `workflowStartedAt`, `status` (`running`/`complete`/`blocked`/`needs-attention`), `phase`, `currentStage`/`currentStageLabel`, `counts {done,total:16}`, `timeConsumedMs`, `estimatedTotalMs`, `estimatedRemainingMs`, `eta`, `viewUrl`, `actionRequired` (the `needs-input` items — `key,stage,message,howTo`), `blockers`, and `stages[]` (the dashboard view: `key,label,status` using **`completed`** for finished stages, `startedAt,endedAt,durationMs,iterations,verdict`).
 
 Keep `progress.json` small and valid JSON — the dashboard fetches it every 60s and the browser hard-refreshes every 5 minutes. Never block a handoff on the dashboard; if anything is uncertain, still write your best current snapshot.
 
@@ -282,21 +294,19 @@ Keep `progress.json` small and valid JSON — the dashboard fetches it every 60s
 
 Each VPS runs independently and **pushes** its snapshot to a central collector so all runs show on one global board (`https://<central-domain>/`). This is **best-effort and never blocks** a handoff.
 
-- **At intake:** set `runId` once — use `RUN_ID` from `.env` if present, else generate `<sanitized-project>-<hostname>-<4hex>` (see intake step 6) and persist to `.env`. Record `vps` (`hostname`), `localDashboardUrl`, and `centralUrl` in `state.json` and `progress.json`.
+- **At intake:** set `runId` **first** — it must be the first field written to `state.json`. Use `RUN_ID` from `.env` if present, else generate `<sanitized-project>-<uuid4[:8]>` and persist to `.env` immediately. Record `vps` (`hostname`), `localDashboardUrl`, and `centralUrl` in `state.json` and `progress.json`.
 - **Fleet URL + token (automatic):** from intake `fleetDomain`, set `FLEET_DOMAIN` and `CENTRAL_DASHBOARD_URL=https://<fleet-domain>` in `.env`. Fetch the push token (never ask the user):
   ```bash
   curl -fsS --max-time 8 "https://<fleet-domain>/api/fleet-config"
   ```
-  Parse JSON → write `CENTRAL_PUSH_TOKEN` to `.env` (idempotent: only if missing). Retry up to 3 times with 2s pause. If the central host is not up yet, leave token empty and **retry on every handoff** before each push — still never block the run.
-- **Detect local dashboard host:** `curl -fsS --max-time 3 ifconfig.me` or `hostname -I` → build `localDashboardUrl` as `http://<ip>:${PROGRESS_PORT}/agentprogress.html`.
-- **On every capture, after writing `progress.json`:** if `CENTRAL_PUSH_TOKEN` is missing but `CENTRAL_DASHBOARD_URL` is set, try fetching `/api/fleet-config` again. Then if both are set, POST the snapshot:
+  Parse JSON → write `CENTRAL_PUSH_TOKEN` to `.env` (idempotent: only if missing). Retry up to 3 times with 2s pause. If the central host is not up yet, warn Sunny to deploy Hari first — leave token empty and **retry on every handoff** before each push — still never block the run.
+- **Detect local dashboard host (IPv4 only):** prefer `curl -fsS --max-time 3 ifconfig.me` or the first IPv4 from `hostname -I | awk '{print $1}'`. **Never** use raw IPv6 in user-facing `localDashboardUrl`. Build `http://<ipv4>:${PROGRESS_PORT}/agentprogress.html`.
+- **On every capture, after writing `progress.json`:** if `CENTRAL_PUSH_TOKEN` is missing but `CENTRAL_DASHBOARD_URL` is set, try fetching `/api/fleet-config` again. Then if both are set, run the fleet push script (bypasses Cloudflare ASN blocks on worker VPSs):
   ```bash
-  curl -fsS --max-time 8 -X POST "$CENTRAL_DASHBOARD_URL/api/runs/$RUN_ID" \
-    -H "Authorization: Bearer $CENTRAL_PUSH_TOKEN" \
-    -H "Content-Type: application/json" \
-    --data-binary @.sunny/web/progress.json || true
+  python3 .sunny/push-fleet.py || true
   ```
-- **Failures are non-fatal:** if the central host is unreachable, log a one-line note and continue — the local dashboard is unaffected and the next handoff retries the fleet-config fetch + push. If `fleetDomain` was not given at kickoff, skip fleet entirely (local dashboard only).
+  The script reads `.sunny/web/progress.json`, validates `runId`, uses `COLLECTOR_DIRECT_IP` from `.env` when set (direct HTTP to the collector container), and POSTs the full payload including `domain`, `counts`, `currentStageLabel`, `actionRequired`, and `stages[]`.
+- **Failures are non-fatal:** if the central host is unreachable, log a one-line note and continue — the local dashboard is unaffected and the next handoff retries. If `fleetDomain` was not given at kickoff, skip fleet entirely (local dashboard only).
 
 ## Secrets & environment bootstrap (auto-generated — no manual `.env`)
 
@@ -316,7 +326,7 @@ At intake you create the project's root `.env` so the operator never has to hand
 - **Start from the template.** Copy `.env.example` → `.env`, then replace every `change-me*` placeholder with a generated secret or the real intake value.
 - **Never expose secret values.** Do **not** write secret values into `project-context.md`, `state.json`, `progress.json`, handoff packages, fix logs, or chat. Only record that they were **generated** (boolean/notes), never the values.
 - **Keep it out of Git.** `.env` is already covered by `.gitignore`; confirm it is ignored. Never stage or commit it.
-- **Minimum keys to ensure exist** (generate if missing): `DOMAIN`, `FLEET_DOMAIN`, `CENTRAL_DASHBOARD_URL`, `CENTRAL_PUSH_TOKEN` (fetch from fleet-config when fleet domain given), `ACME_EMAIL`, `PROGRESS_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `SPRING_PROFILES_ACTIVE`, `JHIPSTER_SECURITY_AUTHENTICATION_JWT_BASE64_SECRET`, `JHIPSTER_REGISTRY_PASSWORD`, `RUN_ID`. (Frontend `VITE_API_URL`/`REACT_APP_API_URL` and optional `DASHBOARD_AUTH_*` are set/extended later by Naveen.)
+- **Minimum keys to ensure exist** (generate if missing): `DOMAIN`, `FLEET_DOMAIN`, `CENTRAL_DASHBOARD_URL`, `CENTRAL_PUSH_TOKEN` (fetch from fleet-config when fleet domain given), `COLLECTOR_DIRECT_IP` (optional — direct collector container IP for fleet push; set by Hari or operator), `ACME_EMAIL`, `PROGRESS_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `SPRING_PROFILES_ACTIVE`, `JHIPSTER_SECURITY_AUTHENTICATION_JWT_BASE64_SECRET`, `JHIPSTER_REGISTRY_PASSWORD`, `RUN_ID`. (Frontend `VITE_API_URL`/`REACT_APP_API_URL` and optional `DASHBOARD_AUTH_*` are set/extended later by Naveen.)
 
 Downstream agents (Vikram, Naveen, the test stages) **consume** these env vars and must reference them as `${VAR}` in `docker-compose`/config — they must never hardcode secret literals or regenerate the ones you created.
 
@@ -338,16 +348,16 @@ Downstream agents (Vikram, Naveen, the test stages) **consume** these env vars a
 
 Create or reset the store:
 
-1. Write `project-context.md` from the frontend analysis and user requirements — including the **Deployment & domain** section (domain + Certbot email passed by Sunny; mark as open questions if absent).
-2. Initialize `state.json` with `phase: "intake"`, the `project` block (name/domain/acmeEmail), `workflowStartedAt = now`, counters at 0, empty blockers, and `stages[]` seeded from the dashboard stage map.
+1. Write `project-context.md` from the frontend analysis and user requirements — including the **Deployment & domain** section (domain + Certbot email passed by Sunny; mark as open questions if absent). Note if the frontend is Lovable-exported (Supabase/Lovable expected until Isha runs).
+2. Initialize `state.json` with `runId` as the **first field**, then `phase: "intake"`, the `project` block (name/domain/acmeEmail), `workflowStartedAt = now`, counters at 0, empty blockers, and `stages[]` seeded from the dashboard stage map (16 entries).
 3. Create empty placeholder files for phase reports if they do not exist.
-4. Seed the dashboard: create `.sunny/web/`, copy `agentprogress.html` + `docker-compose.yml` + `nginx-progress.conf` from `.cursor/dashboard/`, and write the first `progress.json`. (Sunny starts the publisher; you only create the files.)
+4. Seed the dashboard: create `.sunny/web/`, copy `agentprogress.html` + `docker-compose.yml` + `nginx-progress.conf` from `.cursor/dashboard/`, copy `push-fleet.py` from `.cursor/dashboard/push-fleet.py` → `.sunny/push-fleet.py`, copy `KNOWN_ISSUES.md` from `.cursor/dashboard/KNOWN_ISSUES.md` → `.sunny/KNOWN_ISSUES.md` **only if missing** (empty per-project ledger — never copy issues from another project), set `**Project:** {name}` in the KNOWN_ISSUES header, and write the first `progress.json` with `stages` as a **JSON array** and `counts.total: 16`. (Sunny starts the publisher; you only create the files.)
 5. **Bootstrap secrets & environment** — generate the root `.env` with strong secrets so no human has to (see "Secrets & environment bootstrap" below).
 6. **Register fleet identity** (same agents on every VPS — each machine is an independent run):
-   - **`RUN_ID`:** if not already in `.env`, generate once as `<sanitized-project>-<hostname>-<4hex>` and persist.
+   - **`RUN_ID`:** if not already in `.env`, generate once as `<sanitized-project>-<uuid4[:8]>` and persist. Mirror to `state.json.runId` immediately.
    - **`vps`:** `hostname` → `state.json` / `progress.json`.
-   - **`localDashboardUrl`:** detect server IP, set `http://<ip>:8787/agentprogress.html` (update to `https://<domain>/agentprogress.html` after Nginx).
-   - **Fleet (from intake `fleetDomain` only):** write `FLEET_DOMAIN`, `CENTRAL_DASHBOARD_URL`, fetch `CENTRAL_PUSH_TOKEN` from `/api/fleet-config`, set `state.json.centralUrl` + `project.fleetDomain`, perform **first fleet push** after initial `progress.json`.
+   - **`localDashboardUrl`:** detect server **IPv4**, set `http://<ipv4>:8787/agentprogress.html` (update to `https://<domain>/agentprogress.html` after Nginx).
+   - **Fleet (from intake `fleetDomain` only):** write `FLEET_DOMAIN`, `CENTRAL_DASHBOARD_URL`, fetch `CENTRAL_PUSH_TOKEN` from `/api/fleet-config`, set `state.json.centralUrl` + `project.fleetDomain`, perform **first fleet push** via `python3 .sunny/push-fleet.py` after initial `progress.json`.
 
 ### 1.5 On resume (`sourceAgent: resume`)
 
@@ -356,7 +366,7 @@ Sunny calls you with `sourceAgent: resume` when a prior run is being continued (
 1. Read `state.json` and report the resume point: `phase`, the `active`/first-not-done stage, iteration counters, open `blockers`.
 2. **Recreate only what's missing** — never clobber existing state: ensure `.env` exists with the minimum keys (append only missing ones; never regenerate existing secrets), `RUN_ID` is present, the `.sunny/web/` bundle exists (re-copy only if absent), and `CENTRAL_PUSH_TOKEN` is set if `fleetDomain` is configured (re-fetch from `/api/fleet-config` if missing).
 3. Increment `resumeCount`, set `lastAgent`, stamp `updatedAt` (atomic write).
-4. Rewrite `progress.json` from current state and perform a fleet push so both dashboards immediately show the run is live again.
+4. Rewrite `progress.json` from current state and run `python3 .sunny/push-fleet.py` so both dashboards immediately show the run is live again.
 5. Return a handoff telling Sunny exactly which stage/agent to re-enter (the `active` stage's next agent). Do not advance the phase — Sunny re-runs the interrupted stage idempotently.
 
 ### 2. On agent output capture (every invocation)
@@ -374,6 +384,7 @@ You will receive:
 4. If the source agent emitted a verdict line, record it exactly in `lastVerdict`.
 5. Rewrite `.sunny/web/progress.json` from the updated state (see "Progress dashboard" above), also via atomic write.
 6. Return a **handoff package** for the next agent (see Output expectations).
+7. When agents report new blockers or recurring failures, launch **issues-log-agent (Leela)** after capture — Leela appends to `.sunny/KNOWN_ISSUES.md` (do not paste arcadian-wealth or other repo-specific issues into new projects).
 
 ### 3. On context retrieval (when Sunny asks for context only)
 
@@ -417,6 +428,49 @@ Read the requested files and return a trimmed summary for the specified `targetA
 
 ## Open questions
 - Unresolved ambiguities
+```
+
+### frontend-sanitize-summary.md
+
+```markdown
+# Frontend Sanitize Summary
+
+**Updated:** {ISO-8601}
+**Agent:** frontend-sanitize-agent
+
+## Removed
+| Category | Items |
+|----------|-------|
+
+## Placeholders / stubs added
+- {file}: {description}
+
+## Build verification
+- Install / build exit codes
+
+## Ready for architecture
+Yes/No — frontend free of Supabase/Lovable; build passes.
+```
+
+### frontend-sanitize-verify-report.md
+
+```markdown
+# Frontend Sanitize Verify Report
+
+**Iteration:** {n}
+**Verdict:** {exact phrase or not complete}
+
+## Findings
+| ID | Severity | Category | Location | Finding | Recommendation |
+```
+
+### frontend-sanitize-fix-log.md
+
+```markdown
+# Frontend Sanitize Fix Log
+
+## Cycle {n}
+**Findings addressed:** FS001, ...
 ```
 
 ### architecture-summary.md
@@ -854,7 +908,10 @@ Append each remediation cycle:
 
 | Target agent | Include from store |
 | --- | --- |
-| architecture-agent | `project-context.md` (full); `architecture-verify-report.md` (findings) if re-running |
+| frontend-sanitize-agent | `project-context.md` (full); `frontend-sanitize-verify-report.md` (findings) if re-running |
+| frontend-sanitize-verify-agent | `frontend-sanitize-summary.md`, `project-context.md` |
+| frontend-sanitize-fix-agent | `frontend-sanitize-verify-report.md` (findings), `frontend-sanitize-summary.md`, `frontend-sanitize-fix-log.md` tail |
+| architecture-agent | `project-context.md` (full), `frontend-sanitize-summary.md`; `architecture-verify-report.md` (findings) if re-running |
 | architecture-verify-agent | `architecture-summary.md`, `project-context.md` |
 | architecture-fix-agent | `architecture-verify-report.md` (findings), `architecture-summary.md`, `architecture-fix-log.md` tail |
 | jhipster-backend-agent | `project-context.md` (full), `architecture-summary.md` (approved blueprint + draft JDL) |
