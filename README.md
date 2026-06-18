@@ -2,7 +2,7 @@
 
 A collection of **Cursor AI agents** that turn a frontend application into a complete, enterprise-grade **JHipster microservices** backend — fully generated, verified, tested to 95%+ coverage, and audited for production readiness.
 
-At the center is **Sunny**, an orchestrator that coordinates specialized agents through continuous verify → fix and test → verify loops until every quality gate passes. Agents use **Graphify** (`graphify update`) for token-efficient codebase context. A standalone **documentation** agent (Swagger + Postman + Javadoc) is also included.
+At the center is **Sunny**, an orchestrator that coordinates specialized agents through continuous verify → fix and test → verify loops until every quality gate passes. **Isha** strips Supabase/Lovable from Lovable-exported frontends before architecture; **Leela** logs per-project issues to `.sunny/KNOWN_ISSUES.md`. Agents use **Graphify** (`graphify update`) for token-efficient codebase context. A standalone **documentation** agent (Swagger + Postman + Javadoc) is also included.
 
 ---
 
@@ -32,6 +32,10 @@ This repository contains **agent definitions and orchestration rules** for Curso
     ├── ARCHITECTURE.md                    # All architecture + workflow diagrams
     ├── sunny.md                           # Orchestrator persona
     ├── context-agent.md                   # Shared memory (.sunny/context/ store)
+    ├── issues-log-agent.md                # Per-project .sunny/KNOWN_ISSUES.md ledger
+    ├── frontend-sanitize-agent.md         # Strips Supabase/Lovable from Lovable exports
+    ├── frontend-sanitize-verify-agent.md  # Audits sanitization (readonly)
+    ├── frontend-sanitize-fix-agent.md     # Fixes sanitization findings
     ├── architecture-agent.md              # Designs architecture blueprint + boilerplate
     ├── architecture-verify-agent.md       # Reviews the architecture (readonly)
     ├── architecture-fix-agent.md          # Fixes architecture review findings
@@ -92,6 +96,10 @@ At runtime, the Context Agent creates a `.sunny/context/` store that acts as sha
 |-------|------|----------|
 | **Sunny** | Orchestrates all agents, runs loops, enforces quality gates | No |
 | **Context Agent** | Shared memory; persists structured summaries between runs | No |
+| **Issues Log Agent** | Per-project `.sunny/KNOWN_ISSUES.md` when problems occur | No |
+| **Frontend Sanitize Agent** | Removes Supabase/Lovable from Lovable-exported frontends | No |
+| **Frontend Sanitize Verify Agent** | Audits zero Supabase/Lovable remnants + green build | Yes |
+| **Frontend Sanitize Fix Agent** | Fixes frontend sanitization findings | No |
 | **Architecture Agent** | Designs architecture blueprint + boilerplate from the frontend | No |
 | **Architecture Verify Agent** | Reviews decomposition, API coverage, JDL, auth design | Yes |
 | **Architecture Fix Agent** | Fixes architecture review findings | No |
@@ -148,6 +156,7 @@ Every agent has a human codename. A family shares a base name; its verify/fix va
 
 | Family | Generate | Verify (readonly) | Fix |
 |--------|----------|-------------------|-----|
+| Isha (frontend sanitize) | Isha | Isha Verify | Isha Fix |
 | Arjun (architecture) | Arjun | Arjun Verify | Arjun Fix |
 | Vikram (backend build) | Vikram | Vikram Verify | Vikram Fix |
 | Dhruv (database) | Dhruv | Dhruv Verify | Dhruv Fix |
@@ -166,14 +175,16 @@ Every agent has a human codename. A family shares a base name; its verify/fix va
 | Pawan (API performance) | Pawan | Pawan Verify | Pawan Fix |
 | Prakash (production) | — | Prakash | Prakash Fix |
 
-**Singletons:** Sunny (orchestrator) · Maya (shared memory / context) · Deepa (standalone documentation) · Hari (standalone fleet-host — deploys the global dashboard). The full codename → slug mapping is in [`.cursor/agents/README.md`](.cursor/agents/README.md#agent-codenames).
+**Singletons:** Sunny (orchestrator) · Maya (shared memory / context) · Leela (issues log) · Deepa (standalone documentation) · Hari (standalone fleet-host — deploys the global dashboard). The full codename → slug mapping is in [`.cursor/agents/README.md`](.cursor/agents/README.md#agent-codenames).
 
 ## Workflow at a glance
 
 ```mermaid
 flowchart LR
-    FE([Frontend]) --> S[Sunny]
-    S --> AL{Architecture loop}
+    FE([Lovable Frontend]) --> S[Sunny]
+    S --> SL{Frontend sanitize loop}
+    SL -->|issues| SFIX[Fix] --> SL
+    SL -->|"Frontend sanitization complete"| AL{Architecture loop}
     AL -->|issues| AFIX[Fix] --> AL
     AL -->|"Architecture approved"| GEN[Generate backend]
     GEN --> VL{Verify loop}
@@ -195,10 +206,11 @@ flowchart LR
     PL -->|"Final approval granted"| DONE([Production-ready])
 ```
 
-The pipeline runs **architecture → backend (JHipster) → database → nginx & SSL (domain + Certbot) → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production**. Backend and frontend tests each split into **three layers — unit, integration, functional — and each layer has its own generation, verify, and fix agent**; the system integration stage then exercises the **whole stack together** (real frontend + gateway + microservices + PostgreSQL); then five documentation/API stages run in order (Swagger first, since its spec feeds the API collection and API tests); finally the production agent audits every prior stage and produces a comprehensive report. Every phase runs a verify -> fix -> re-verify loop that breaks only on an **exact verdict phrase**, and caps at **5 iterations** per loop before escalating to the user:
+The pipeline runs **frontend sanitization → architecture → backend (JHipster) → database → nginx & SSL (domain + Certbot) → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production** (16 dashboard stages including intake). Backend and frontend tests each split into **three layers — unit, integration, functional — and each layer has its own generation, verify, and fix agent**; the system integration stage then exercises the **whole stack together** (real frontend + gateway + microservices + PostgreSQL); then five documentation/API stages run in order (Swagger first, since its spec feeds the API collection and API tests); finally the production agent audits every prior stage and produces a comprehensive report. **Leela** logs actionable problems to `.sunny/KNOWN_ISSUES.md` per project. Every phase runs a verify -> fix -> re-verify loop that breaks only on an **exact verdict phrase**, and caps at **5 iterations** per loop before escalating to the user:
 
 | Loop | Exit phrase |
 |------|-------------|
+| Frontend sanitization | `Frontend sanitization complete.` |
 | Architecture | `Architecture approved.` |
 | Backend verification | `No issues found. Backend approved.` |
 | Database | `Database approved.` |
@@ -257,7 +269,7 @@ In a Cursor chat, invoke Sunny and point it at your frontend:
 
 > Sunny, build the JHipster microservices backend for the frontend in `./frontend`. Project domain: `mememates.org`. Fleet domain: `fleet.example.com`.
 
-Provide **only** the **project domain** and **fleet domain** at kickoff — agents generate `.env` secrets, fetch the fleet push token, configure dashboards, and wire Nginx/Certbot. Optional: add a Certbot email; otherwise agents use `admin@<project-domain>`. Sunny will analyze the frontend, design the architecture, generate the backend, harden the database, configure Nginx + SSL on the domain (Certbot), run the backend and frontend testing loops, run collective system integration tests across the whole stack, produce and verify the documentation & API stages (Swagger, Javadoc, Postman collection, API status tests, and API performance at 1/10/20/30 concurrency), and finish with a production audit that reviews every prior stage and emits a comprehensive final report — announcing each phase and iteration as it goes. Progress and intermediate summaries are written to `.sunny/context/`.
+Provide **only** the **project domain** and **fleet domain** at kickoff — agents generate `.env` secrets, fetch the fleet push token, configure dashboards, and wire Nginx/Certbot. Optional: add a Certbot email; otherwise agents use `admin@<project-domain>`. Sunny will sanitize the frontend (strip Supabase/Lovable), design the architecture, generate the backend, harden the database, configure Nginx + SSL on the domain (Certbot), run the backend and frontend testing loops, run collective system integration tests across the whole stack, produce and verify the documentation & API stages (Swagger, Javadoc, Postman collection, API status tests, and API performance at 1/10/20/30 concurrency), and finish with a production audit that reviews every prior stage and emits a comprehensive final report — announcing each phase and iteration as it goes. Progress and intermediate summaries are written to `.sunny/context/`; actionable problems are logged to `.sunny/KNOWN_ISSUES.md`.
 
 ### Watch live progress
 

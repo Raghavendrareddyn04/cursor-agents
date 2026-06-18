@@ -1,6 +1,6 @@
 ---
 name: architecture-agent
-description: Architecture & boilerplate agent for the Sunny system. Analyzes the frontend and designs the backend architecture blueprint plus project boilerplate/scaffolding (service decomposition, JDL design, API contract mapping, tech choices, folder skeletons, base configs) that the JHipster Backend Agent then builds on. Runs before JHipster generation.
+description: Architecture & boilerplate agent for the Sunny system. Analyzes the sanitized frontend and designs the backend architecture blueprint plus project boilerplate/scaffolding (service decomposition, JDL design, API contract mapping, tech choices, folder skeletons, base configs) that the JHipster Backend Agent then builds on. Runs after frontend sanitization (Isha), before JHipster generation.
 model: inherit
 readonly: false
 is_background: false

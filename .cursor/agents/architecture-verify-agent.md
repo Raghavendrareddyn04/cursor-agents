@@ -1,6 +1,6 @@
 ---
 name: architecture-verify-agent
-description: Architecture verification agent for Sunny. Readonly review of the architecture blueprint and project boilerplate — service decomposition, domain model, API contract coverage, auth design, JDL correctness, and standards — before JHipster generation. Emits the exact architecture approval verdict when clean.
+description: Architecture verification agent for Sunny. Readonly review of the architecture blueprint and project boilerplate — service decomposition, domain model, API contract coverage, auth design (JHipster JWT, not Supabase), JDL correctness, and standards — after frontend sanitization and before JHipster generation. Emits the exact architecture approval verdict when clean.
 model: inherit
 readonly: true
 is_background: false

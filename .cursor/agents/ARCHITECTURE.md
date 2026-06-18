@@ -43,6 +43,7 @@ Visual reference for the Sunny multi-agent system: component architecture, contr
 - **Production agent** audits every prior stage's completeness (do's and don'ts) and emits one comprehensive final report.
 - **Every loop:** independent exit phrase + iteration counter, capped at **5** — then `needs-attention` notifications and continue by default (hard stop only on a technical dependency).
 - **One writer of shared memory:** `context-agent` owns `.sunny/context/` and `.sunny/web/`.
+- **Per-project issues ledger:** `issues-log-agent` (Leela) owns `.sunny/KNOWN_ISSUES.md` when problems are reported.
 
 ### Agent codenames
 
@@ -50,6 +51,7 @@ Each agent has a human codename; a family shares a base name and its verify/fix 
 
 | Family | Base | Verify | Fix |
 |--------|------|--------|-----|
+| frontend sanitization | Isha | Isha Verify | Isha Fix |
 | architecture | Arjun | Arjun Verify | Arjun Fix |
 | backend build | Vikram | Vikram Verify | Vikram Fix |
 | database | Dhruv | Dhruv Verify | Dhruv Fix |
@@ -61,13 +63,13 @@ Each agent has a human codename; a family shares a base name and its verify/fix 
 | API collection / tests / performance | Chetan / Tara / Pawan | + Verify | + Fix |
 | production | Prakash | Prakash (audit) | Prakash Fix |
 
-**Singletons:** Sunny (orchestrator) · Maya (context/shared memory) · Deepa (standalone documentation) · Hari (standalone fleet-host — deploys the global dashboard). Full mapping: [`README.md`](README.md#agent-codenames).
+**Singletons:** Sunny (orchestrator) · Maya (context/shared memory) · Leela (issues log) · Deepa (standalone documentation) · Hari (standalone fleet-host — deploys the global dashboard). Full mapping: [`README.md`](README.md#agent-codenames).
 
 ---
 
 ## 1. System architecture (pipeline order)
 
-The agents run as an **ordered pipeline**: design the architecture, generate the backend, verify and fix it, harden the database, then generate and verify tests (backend, then frontend), then collective system integration tests (frontend + backend + database together), then the documentation & API stages (Swagger, Javadoc, API collection, API status tests, API performance), then the final production audit that reviews every prior stage and produces a comprehensive report. The Driver (main chat agent) launches each stage via the Task tool, and the Context Agent persists output between every stage. Read top to bottom — generation always precedes verification.
+The agents run as an **ordered pipeline**: sanitize the Lovable frontend (remove Supabase/Lovable), design the architecture, generate the backend, verify and fix it, harden the database, configure Nginx & SSL, then generate and verify tests (backend, then frontend), then collective system integration tests (frontend + backend + database together), then the documentation & API stages (Swagger, Javadoc, API collection, API status tests, API performance), then the final production audit. **16 dashboard stages** (intake + 15 execution stages). The Driver launches each stage via the Task tool; Maya persists output after every stage; Leela logs actionable problems to `.sunny/KNOWN_ISSUES.md`.
 
 ```mermaid
 flowchart TB
@@ -75,29 +77,32 @@ flowchart TB
 
     subgraph pipeline [Execution Pipeline - top to bottom]
         direction TB
-        S0["Stage 1 - Architecture & boilerplate<br/>architecture-agent<br/>verify: architecture-verify-agent (readonly)<br/>fix: architecture-fix-agent"]
-        S1["Stage 2 - Generate backend<br/>jhipster-backend-agent"]
-        S2["Stage 3 - Verify backend (readonly)<br/>jhipster-verify-agent<br/>fix: issue-resolution-agent"]
-        SD["Stage 4 - Database hardening<br/>database-agent<br/>verify: database-verify-agent (readonly)<br/>fix: database-fix-agent"]
-        SN["Stage 5 - Nginx & SSL edge<br/>nginx-agent: reverse proxy + domain + Certbot<br/>verify: nginx-verify-agent (readonly)<br/>fix: nginx-fix-agent"]
-        S3["Stage 6 - Backend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
-        S4["Stage 7 - Frontend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
-        SI["Stage 8 - System integration tests (collective)<br/>frontend + backend + PostgreSQL together<br/>system-integration-test-agent<br/>verify: system-integration-test-verify-agent (readonly)<br/>fix: system-integration-test-fix-agent"]
-        SDOC["Stages 9-13 - Documentation & API<br/>Swagger -> Javadoc -> API collection -> API tests -> API performance<br/>each: generate + verify (readonly) + fix loop"]
-        S5["Stage 14 - Production (readonly audit)<br/>production-standards-agent: audits ALL prior outputs<br/>+ comprehensive final report<br/>fix: production-fix-agent"]
-        S0 --> S1 --> S2 --> SD --> SN --> S3 --> S4 --> SI --> SDOC --> S5
+        S0["Stage 1 - Frontend sanitization<br/>frontend-sanitize-agent<br/>verify: frontend-sanitize-verify-agent (readonly)<br/>fix: frontend-sanitize-fix-agent"]
+        S1["Stage 2 - Architecture & boilerplate<br/>architecture-agent<br/>verify: architecture-verify-agent (readonly)<br/>fix: architecture-fix-agent"]
+        S2["Stage 3 - Generate backend<br/>jhipster-backend-agent"]
+        S3["Stage 4 - Verify backend (readonly)<br/>jhipster-verify-agent<br/>fix: issue-resolution-agent"]
+        SD["Stage 5 - Database hardening<br/>database-agent<br/>verify: database-verify-agent (readonly)<br/>fix: database-fix-agent"]
+        SN["Stage 6 - Nginx & SSL edge<br/>nginx-agent: reverse proxy + domain + Certbot<br/>verify: nginx-verify-agent (readonly)<br/>fix: nginx-fix-agent"]
+        SB["Stage 7 - Backend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
+        SF["Stage 8 - Frontend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
+        SI["Stage 9 - System integration tests (collective)<br/>frontend + backend + PostgreSQL together<br/>system-integration-test-agent<br/>verify: system-integration-test-verify-agent (readonly)<br/>fix: system-integration-test-fix-agent"]
+        SDOC["Stages 10-14 - Documentation & API<br/>Swagger -> Javadoc -> API collection -> API tests -> API performance<br/>each: generate + verify (readonly) + fix loop"]
+        S5["Stage 15 - Production (readonly audit)<br/>production-standards-agent: audits ALL prior outputs<br/>+ comprehensive final report<br/>fix: production-fix-agent"]
+        S0 --> S1 --> S2 --> S3 --> SD --> SN --> SB --> SF --> SI --> SDOC --> S5
     end
 
     Driver -->|launches each stage in order| pipeline
 
-    subgraph memory [Shared Memory]
+    subgraph memory [Shared Memory and Issues]
         Ctx["context-agent"]
         Store[(".sunny/context/<br/>reports + state.json")]
+        Leela["issues-log-agent<br/>.sunny/KNOWN_ISSUES.md"]
         Ctx <-->|read / write| Store
     end
 
     pipeline -.output after each stage.-> Ctx
     Ctx -.trimmed handoff to next stage.-> pipeline
+    pipeline -.findings / blockers.-> Leela
 ```
 
 ### 1.1 Agents and their responsibilities
@@ -108,11 +113,21 @@ Each agent with its key points, grouped by stage. Readonly agents only audit and
 flowchart TB
     subgraph orch [Orchestration and Memory]
         direction LR
-        DRV["Sunny / Driver<br/>• Orchestrates all 17 verify/fix loops<br/>• Matches exact exit phrases<br/>• Enforces quality gates<br/>• Escalates when blocked"]
+        DRV["Sunny / Driver<br/>• Orchestrates all 18 verify/fix loops<br/>• Matches exact exit phrases<br/>• Enforces quality gates<br/>• Invokes Leela on findings"]
         CTX["context-agent<br/>• Sole writer of .sunny/context<br/>• Structured summaries + state.json<br/>• Trims handoffs to next agent<br/>• Tracks phase + iteration counters"]
+        LEL["issues-log-agent<br/>• Per-project KNOWN_ISSUES.md<br/>• Symptom / cause / fix / prevention"]
     end
 
-    subgraph sArch [Stage 1 - Architecture and boilerplate]
+    subgraph sSan [Stage 1 - Frontend sanitization]
+        direction LR
+        ISH["frontend-sanitize-agent<br/>• Remove Supabase/Lovable deps<br/>• Strip branding + integrations<br/>• Compile-safe stubs only"]
+        ISHV["frontend-sanitize-verify-agent - readonly<br/>• Zero supabase/lovable in src/<br/>• Build passes<br/>• Exit: Frontend sanitization complete."]
+        ISHF["frontend-sanitize-fix-agent<br/>• Closes sanitization findings"]
+        ISH --> ISHV
+        ISHV -->|issues| ISHF --> ISHV
+    end
+
+    subgraph sArch [Stage 2 - Architecture and boilerplate]
         direction LR
         ARC["architecture-agent<br/>• Service decomposition (bounded contexts)<br/>• Domain model + API contract map<br/>• Draft JDL + boilerplate/scaffolding<br/>• Microservices, PostgreSQL, no mock data"]
         ARCV["architecture-verify-agent - readonly<br/>• Decomposition + API coverage review<br/>• JDL consistency + auth design<br/>• Exit: Architecture approved."]
@@ -121,7 +136,7 @@ flowchart TB
         ARCV -->|issues| ARCF --> ARCV
     end
 
-    subgraph s12 [Stage 2-3 - Backend build and verify]
+    subgraph s12 [Stage 3-4 - Backend build and verify]
         direction LR
         GEN["jhipster-backend-agent<br/>• Microservices: gateway + services + registry<br/>• PostgreSQL + Liquibase<br/>• JWT/OAuth2 + RBAC, Docker<br/>• No mock/fake data"]
         VER["jhipster-verify-agent - readonly<br/>• REST/OpenAPI/RFC7807 audit<br/>• Auth + vulnerability checks<br/>• Microservices + DB integrity<br/>• Exit: No issues found. Backend approved."]
@@ -130,7 +145,7 @@ flowchart TB
         VER -->|issues| ISS --> VER
     end
 
-    subgraph sDb [Stage 4 - Database hardening]
+    subgraph sDb [Stage 5 - Database hardening]
         direction LR
         DBA["database-agent<br/>• PostgreSQL connections + HikariCP<br/>• Liquibase migrations, constraints, indexes<br/>• Schema standards, no mock data"]
         DBV["database-verify-agent - readonly<br/>• Schema/migrations + integrity audit<br/>• Migrations apply on fresh PostgreSQL<br/>• Exit: Database approved."]
@@ -139,7 +154,7 @@ flowchart TB
         DBV -->|issues| DBF --> DBV
     end
 
-    subgraph sNg [Stage 5 - Nginx & SSL edge]
+    subgraph sNg [Stage 6 - Nginx & SSL edge]
         direction LR
         NG["nginx-agent<br/>• Reverse proxy: frontend + gateway on domain<br/>• TLS termination, HTTP→HTTPS redirect<br/>• Certbot/Let's Encrypt + auto-renewal"]
         NGV["nginx-verify-agent - readonly<br/>• Routing + TLS + Certbot audit<br/>• Exit: Nginx and SSL approved."]
@@ -148,7 +163,7 @@ flowchart TB
         NGV -->|issues| NGF --> NGV
     end
 
-    subgraph s3 [Stage 6 - Backend testing - per-layer verify and fix]
+    subgraph s3 [Stage 7 - Backend testing - per-layer verify and fix]
         direction TB
         subgraph s3u [Unit layer]
             direction LR
@@ -177,7 +192,7 @@ flowchart TB
         s3u --> s3i --> s3f
     end
 
-    subgraph s4 [Stage 7 - Frontend testing - per-layer verify and fix]
+    subgraph s4 [Stage 8 - Frontend testing - per-layer verify and fix]
         direction TB
         subgraph s4u [Unit layer]
             direction LR
@@ -206,7 +221,7 @@ flowchart TB
         s4u --> s4i --> s4f
     end
 
-    subgraph sSi [Stage 8 - System integration testing - collective full-stack]
+    subgraph sSi [Stage 9 - System integration testing - collective full-stack]
         direction LR
         SI["system-integration-test-agent<br/>• Runs whole stack together<br/>• Real frontend + gateway + services + PostgreSQL<br/>• Cross-tier journeys + auth propagation"]
         SIV["system-integration-test-verify-agent - readonly<br/>• Full-stack journey coverage on real stack<br/>• UI + API + DB persistence asserted<br/>• Exit: System integration testing requirements satisfied."]
@@ -215,7 +230,7 @@ flowchart TB
         SIV -->|gaps| SIF --> SIV
     end
 
-    subgraph sDoc [Stages 9-13 - Documentation and API]
+    subgraph sDoc [Stages 10-14 - Documentation and API]
         direction TB
         subgraph sSw [Swagger / OpenAPI]
             direction LR
@@ -260,14 +275,14 @@ flowchart TB
         sSw --> sJd --> sAc --> sAt --> sAp
     end
 
-    subgraph s5 [Stage 14 - Production]
+    subgraph s5 [Stage 15 - Production]
         direction LR
         PS["production-standards-agent - readonly<br/>• Audits ALL prior stage outputs (do's/don'ts)<br/>• Security + readiness + standards + performance<br/>• Comprehensive final report<br/>• Exit: Final approval granted. System is production-ready."]
         PF["production-fix-agent<br/>• Remediates PR findings<br/>• No control weakening<br/>• Rebuild + run tests<br/>• Returns for re-audit"]
         PS -->|findings| PF --> PS
     end
 
-    orch --> sArch --> s12 --> sDb --> sNg --> s3 --> s4 --> sSi --> sDoc --> s5
+    orch --> sSan --> sArch --> s12 --> sDb --> sNg --> s3 --> s4 --> sSi --> sDoc --> s5
 ```
 
 ---
@@ -279,9 +294,19 @@ The strict call order with all loops and their exact exit phrases.
 ```mermaid
 flowchart TD
     Start(["Frontend Input<br/>+ project domain + fleet domain"]) --> Intake["Intake<br/>context-agent: .env secrets<br/>fleet token fetch, RUN_ID<br/>dashboard + fleet push"]
-    Intake --> Pub["Early publisher<br/>http://server-ip:8787/agentprogress.html"]
+    Intake --> Pub["Early publisher<br/>http://server-ipv4:8787/agentprogress.html"]
 
-    Intake --> AGen[architecture-agent]
+    Intake --> ISan[frontend-sanitize-agent]
+    ISan --> PIS1["context-agent<br/>frontend-sanitize-summary.md"]
+    PIS1 --> ISanVer[frontend-sanitize-verify-agent]
+    ISanVer --> PIS2["context-agent<br/>frontend-sanitize-verify-report.md"]
+    PIS2 --> ISanApproved{"lastVerdict ==<br/>'Frontend sanitization complete.'?"}
+    ISanApproved -->|No| CapIS{"frontendSanitizeVerifyIterations<br/>>= 5?"}
+    CapIS -->|No| ISanFix[frontend-sanitize-fix-agent] --> PIS3["context-agent<br/>frontend-sanitize-fix-log.md"] --> ISanVer
+    CapIS -->|Yes| Attention
+    PIS2 -.->|if findings| Leela1[issues-log-agent]
+
+    ISanApproved -->|Yes| AGen[architecture-agent]
     AGen --> PA1["context-agent<br/>architecture-summary.md"]
     PA1 --> AVer[architecture-verify-agent]
     AVer --> PA2["context-agent<br/>architecture-verify-report.md"]
@@ -353,7 +378,23 @@ flowchart TD
 
 ## 3. Code-level loops (detail)
 
-Three generate → verify → fix loops run in order before testing: **architecture**, **backend code**, **database**. Each has its own exit phrase and iteration counter.
+Four generate → verify → fix loops run in order before backend generation: **frontend sanitization**, **architecture**, **backend code**, **database** (nginx and tests follow). Each has its own exit phrase and iteration counter.
+
+### 3.0 Frontend sanitization loop
+
+```mermaid
+flowchart LR
+    G[frontend-sanitize-agent] --> A[frontend-sanitize-verify-agent]
+    A --> B["context-agent<br/>frontend-sanitize-verify-report.md"]
+    B --> L[issues-log-agent if findings]
+    B --> C{"Frontend sanitization complete?"}
+    C -->|Yes| Exit([Exit to Architecture])
+    C -->|No| D{frontendSanitizeVerifyIterations<br/>>= 5?}
+    D -->|Yes| Stop([Needs attention<br/>continue if possible])
+    D -->|No| E[frontend-sanitize-fix-agent]
+    E --> F["context-agent<br/>frontend-sanitize-fix-log.md"]
+    F --> A
+```
 
 ### 3.1 Architecture loop
 
@@ -583,10 +624,11 @@ flowchart TD
 10. **Exact phrase only.** Near-miss verdicts (typos, extra words) never advance; the verify agent is asked to re-emit the exact phrase.
 11. **Resume-safe checkpointing.** Maya writes `state.json`/`progress.json` atomically (temp + rename) after every handoff, marking a stage `active` on entry and `done` only on its exit verdict. If the run is interrupted, Sunny's Phase −1 resume check re-enters the `active` stage with counters intact — so a crash/reboot resumes from the last checkpoint instead of restarting, and never loses a cap or an "action required" item.
 
-### Same mechanism across all seventeen loops
+### Same mechanism across all eighteen loops
 
 | Loop | Verify / audit agent | Fix agent | Counter | Exit phrase |
 |------|----------------------|-----------|---------|-------------|
+| Frontend sanitization | `frontend-sanitize-verify-agent` | `frontend-sanitize-fix-agent` | `frontendSanitizeVerifyIterations` | `Frontend sanitization complete.` |
 | Architecture | `architecture-verify-agent` | `architecture-fix-agent` | `architectureVerifyIterations` | `Architecture approved.` |
 | Backend code | `jhipster-verify-agent` | `issue-resolution-agent` | `backendVerifyIterations` | `No issues found. Backend approved.` |
 | Database | `database-verify-agent` | `database-fix-agent` | `databaseVerifyIterations` | `Database approved.` |
@@ -617,10 +659,12 @@ sequenceDiagram
     participant U as User
     participant S as Sunny (driver)
     participant C as Context Agent
+    participant L as Issues Log Agent
+    participant ISH as Frontend Sanitize (gen+verify+fix)
     participant A as Architecture (gen+verify+fix)
     participant B as Backend Agent
     participant V as Verify Agent
-    participant I as Issue Resolution
+    participant IR as Issue Resolution
     participant D as Database (gen+verify+fix)
     participant N as Nginx & SSL (gen+verify+fix)
     participant BT as Backend Test Gen+Fix (per layer)
@@ -636,10 +680,31 @@ sequenceDiagram
 
     U->>S: Frontend + requirements + project domain + fleet domain
     S->>C: Intake (project-context.md, state.json, seed .sunny/web dashboard, generate .env secrets)
-    S->>U: Start early publisher -> http://server-ip:8787/agentprogress.html
+    S->>U: Start early publisher -> http://server-ipv4:8787/agentprogress.html
 
     rect rgb(120,120,120)
-    note right of S: Stage 1 - Architecture (max 5)
+    note right of S: Stage 1 - Frontend sanitization (max 5)
+    S->>ISH: Strip Supabase/Lovable from frontend
+    ISH-->>S: frontend-sanitize-summary
+    S->>C: Persist frontend-sanitize-summary.md
+    loop until "Frontend sanitization complete"
+        S->>ISH: Verify sanitization (readonly)
+        ISH-->>S: report + verdict
+        S->>C: Persist frontend-sanitize-verify-report.md
+        alt Findings present
+            S->>L: Log issues to KNOWN_ISSUES.md
+        end
+        alt Not complete and iter < 5
+            S->>ISH: frontend-sanitize-fix-agent closes findings
+            S->>C: Persist frontend-sanitize-fix-log.md
+        else Complete or max iterations
+            note over S: break or needs-attention
+        end
+    end
+    end
+
+    rect rgb(120,120,120)
+    note right of S: Stage 2 - Architecture (max 5)
     S->>A: Design blueprint + boilerplate
     A-->>S: architecture-summary
     S->>C: Persist architecture-summary.md
@@ -657,7 +722,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 2-3 - Generate and verify backend
+    note right of S: Stages 3-4 - Generate and verify backend
     S->>B: Generate JHipster microservices
     B-->>S: backend output
     S->>C: Persist backend-summary.md
@@ -666,8 +731,8 @@ sequenceDiagram
         V-->>S: verify report + verdict
         S->>C: Persist verify-report.md
         alt Issues found and iter < 5
-            S->>I: Fix findings
-            I-->>S: fix summary
+            S->>IR: Fix findings
+            IR-->>S: fix summary
             S->>C: Persist issue-resolution-log.md
         else Approved or max iterations
             note over S: break or needs-attention
@@ -676,7 +741,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 4 - Database hardening (max 5)
+    note right of S: Stage 5 - Database hardening (max 5)
     S->>D: Harden connections, schema, migrations
     D-->>S: database-summary
     S->>C: Persist database-summary.md
@@ -694,7 +759,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 5 - Nginx & SSL edge (max 5)
+    note right of S: Stage 6 - Nginx & SSL edge (max 5)
     S->>N: Configure reverse proxy + domain + Certbot
     N-->>S: nginx-summary
     S->>C: Persist nginx-summary.md
@@ -712,7 +777,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 6 - Backend tests (generate once, then per-layer loops)
+    note right of S: Stage 7 - Backend tests (generate once, then per-layer loops)
     S->>BT: Generate unit, integration, functional
     BT-->>S: tests + coverage
     S->>C: Persist backend-test-report.md
@@ -731,7 +796,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 7 - Frontend tests (generate once, then per-layer loops)
+    note right of S: Stage 8 - Frontend tests (generate once, then per-layer loops)
     S->>FT: Generate unit, integration, functional
     FT-->>S: tests + coverage
     S->>C: Persist frontend-test-report.md
@@ -750,7 +815,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 8 - System integration tests (collective, max 5)
+    note right of S: Stage 9 - System integration tests (collective, max 5)
     S->>SI: Generate full-stack tests (frontend + backend + PostgreSQL)
     SI-->>S: tests + run result
     S->>C: Persist system-integration-test-report.md
@@ -769,7 +834,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stages 9-13 - Documentation & API (in order, max 5 each)
+    note right of S: Stages 10-14 - Documentation & API (in order, max 5 each)
     loop for each stage: swagger -> javadoc -> api-collection -> api-test -> api-performance
         S->>DA: Generate stage artifacts (spec / javadoc / postman / status tests / load scripts)
         DA-->>S: artifacts + run result
@@ -789,7 +854,7 @@ sequenceDiagram
     end
 
     rect rgb(120,120,120)
-    note right of S: Stage 14 - Production (audits ALL prior outputs, max 5)
+    note right of S: Stage 15 - Production (audits ALL prior outputs, max 5)
     loop until "Final approval granted"
         S->>P: Completeness audit of all stages + final audit
         P-->>S: comprehensive report + verdict
@@ -956,7 +1021,12 @@ flowchart LR
 ```mermaid
 stateDiagram-v2
     [*] --> intake
-    intake --> architecture
+    intake --> frontend_sanitize
+    frontend_sanitize --> frontend_sanitize_verify
+    frontend_sanitize_verify --> frontend_sanitize_fix: not complete
+    frontend_sanitize_fix --> frontend_sanitize_verify: re-review
+    frontend_sanitize_verify --> architecture: Frontend sanitization complete
+
     architecture --> architecture_verify
     architecture_verify --> architecture_fix: not approved
     architecture_fix --> architecture_verify: re-review
@@ -1002,6 +1072,7 @@ stateDiagram-v2
     production --> complete: Final approval granted
     complete --> [*]
 
+    frontend_sanitize_verify --> architecture: max iterations, mark frontend_sanitize needs-attention if architecture can continue
     architecture_verify --> backend: max iterations, mark architecture needs-attention if backend can continue
     backend_verify --> database: max iterations, mark backend verification needs-attention if database can continue
     database_verify --> nginx: max iterations, mark database needs-attention if nginx can continue
@@ -1016,6 +1087,7 @@ stateDiagram-v2
     api_performance --> production: max iterations, mark API performance needs-attention
     production --> complete: max iterations, mark production needs-attention and report outstanding items
     architecture_verify --> blocked: hard dependency cannot continue
+    frontend_sanitize_verify --> blocked: hard dependency cannot continue
     backend_verify --> blocked: hard dependency cannot continue
     database_verify --> blocked: hard dependency cannot continue
     nginx_verify --> blocked: hard dependency cannot continue
@@ -1042,8 +1114,10 @@ stateDiagram-v2
 | **Driver** | Main chat agent that follows the playbook and launches sub-agents via the Task tool |
 | **Solid arrow** | Control flow / Task launch |
 | **Dotted arrow** | Data flow (persist / handoff) |
-| **readonly agent** | Audits and reports only; makes no code changes (architecture-verify, jhipster-verify, database-verify, nginx-verify, the six per-layer test-verify agents, system-integration-test-verify, the five doc/API verify agents, production-standards) |
+| **readonly agent** | Audits and reports only; makes no code changes (frontend-sanitize-verify, architecture-verify, jhipster-verify, database-verify, nginx-verify, the six per-layer test-verify agents, system-integration-test-verify, the five doc/API verify agents, production-standards) |
+| **Issues log** | Leela (`issues-log-agent`) appends to `.sunny/KNOWN_ISSUES.md` when findings/blockers occur |
 | **Exit phrase** | Exact string in `state.json.lastVerdict` that breaks a loop |
+| **Frontend sanitization exit** | `Frontend sanitization complete.` |
 | **Architecture exit** | `Architecture approved.` |
 | **Backend code exit** | `No issues found. Backend approved.` |
 | **Database exit** | `Database approved.` |
@@ -1053,4 +1127,4 @@ stateDiagram-v2
 | **System integration exit** | `System integration testing requirements satisfied.` |
 | **Doc/API exits** | `Swagger documentation requirements satisfied.` / `Javadoc documentation requirements satisfied.` / `API collection requirements satisfied.` / `API testing requirements satisfied.` / `API performance testing requirements satisfied.` |
 | **Production exit** | `Final approval granted. System is production-ready.` |
-| **Max iterations** | Default 5 per loop; each loop has its own counter (`architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six `backend/frontend{Unit,Integration,Functional}TestVerifyIterations`; `systemIntegrationTestVerifyIterations`; the five `swagger/javadoc/apiCollection/apiTest/apiPerformanceTestVerifyIterations`; `productionVerifyIterations`); exceeding it marks the stage `needs-attention` **before** launching the fix agent again and continues wherever technically possible. `phase = blocked` is reserved for a hard dependency that makes the next stage impossible. |
+| **Max iterations** | Default 5 per loop; each loop has its own counter (`frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six `backend/frontend{Unit,Integration,Functional}TestVerifyIterations`; `systemIntegrationTestVerifyIterations`; the five `swagger/javadoc/apiCollection/apiTest/apiPerformanceTestVerifyIterations`; `productionVerifyIterations`); exceeding it marks the stage `needs-attention` **before** launching the fix agent again and continues wherever technically possible. `phase = blocked` is reserved for a hard dependency that makes the next stage impossible. |

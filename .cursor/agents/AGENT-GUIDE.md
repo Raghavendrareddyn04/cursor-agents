@@ -190,7 +190,7 @@ Generate all three layers once, then verify/fix each layer in order: **unit → 
 
 ---
 
-## Stage 7 — Frontend testing (three layers)
+## Stage 8 — Frontend testing (three layers)
 
 Same per-layer structure for the frontend: generate once, then **unit → integration/component → functional/E2E**. Target **≥95% line and branch coverage** per layer.
 
@@ -211,7 +211,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 8 — System integration testing (codename family: **Sanjay**)
+## Stage 9 — System integration testing (codename family: **Sanjay**)
 
 ### Sanjay — System Integration Test Agent (`system-integration-test-agent`) · not readonly
 - Tests the **whole system together** — the real frontend driving the real gateway + microservices, persisting to a real PostgreSQL database. Validates cross-tier journeys, auth propagation through the gateway, and end-to-end persistence.
@@ -225,7 +225,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 9 — Swagger / OpenAPI (codename family: **Surya**)
+## Stage 10 — Swagger / OpenAPI (codename family: **Surya**)
 
 ### Surya — Swagger Agent (`swagger-agent`) · not readonly
 - Makes every REST endpoint discoverable and accurate via **springdoc-openapi** annotations + a JWT security scheme, and exports the `openapi.json`/`.yaml` spec per service. The spec feeds the API collection and API tests.
@@ -239,7 +239,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 10 — Javadoc (codename family: **Jaya**)
+## Stage 11 — Javadoc (codename family: **Jaya**)
 
 ### Jaya — Javadoc Agent (`javadoc-agent`) · not readonly
 - Documents every public Java API (controllers, services, DTOs/entities, exceptions, config) for **intent and behavior**, adds `package-info.java`, and configures a Javadoc build that passes with `failOnWarnings`.
@@ -253,7 +253,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 11 — API collection / Postman (codename family: **Chetan**)
+## Stage 12 — API collection / Postman (codename family: **Chetan**)
 
 ### Chetan — API Collection Agent (`api-collection-agent`) · not readonly
 - Builds a runnable **Postman collection + environments** generated from the OpenAPI spec (so it never drifts): a request per endpoint, automated login → token, collection-level bearer auth, test scripts, variable chaining, and Newman CI.
@@ -267,7 +267,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 12 — API tests / status (codename family: **Tara**)
+## Stage 13 — API tests / status (codename family: **Tara**)
 
 ### Tara — API Test Agent (`api-test-agent`) · not readonly
 - Calls **every endpoint** on the real running stack (through the gateway) and asserts each returns its **correct HTTP status**: `200/201/204` on success, and the appropriate `400/401/403/404/409` for negative cases. Covers auth and role-protected access.
@@ -281,7 +281,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 13 — API performance (codename family: **Pawan**)
+## Stage 14 — API performance (codename family: **Pawan**)
 
 ### Pawan — API Performance Test Agent (`api-performance-test-agent`) · not readonly
 - Load-tests every key endpoint at **1, 10, 20, and 30 concurrent requests** against the real stack (k6/JMeter/Gatling/autocannon), capturing p50/p95/p99 latency, throughput, and error rate per level, and asserting thresholds.
@@ -295,7 +295,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 14 — Production (codename family: **Prakash**)
+## Stage 15 — Production (codename family: **Prakash**)
 
 ### Prakash — Production Standards Agent (`production-standards-agent`) · readonly
 - The final gate. **First** runs a completeness audit of every prior stage (a do's-and-don'ts check that each stage emitted its exact verdict and its artifacts exist on disk). **Then** audits security, production readiness, industry standards, performance, and data integrity. **Finally** produces one **comprehensive final report** that consolidates every prior report — including all test coverage, documentation, and API/performance results.

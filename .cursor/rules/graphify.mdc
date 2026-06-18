@@ -42,6 +42,7 @@ Prefer several **narrow** queries over one broad dump. If a query returns too li
 
 | Stage / agent family | Start with |
 |----------------------|------------|
+| Frontend sanitization (Isha) | `graphify query "Supabase, Lovable, integrations, auth, and env references in the frontend"` |
 | Architecture (Arjun) | `graphify query "frontend API calls, data models, routes, and auth"` |
 | Backend build/verify/fix (Vikram) | `graphify query "microservices, entities, and REST endpoints"` |
 | Database (Dhruv) | `graphify query "entities, tables, relationships, and Liquibase changelogs"` |
