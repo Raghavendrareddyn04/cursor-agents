@@ -292,7 +292,8 @@ See [`INSTALL.md`](INSTALL.md) and [`FLEET-QUICKSTART.md`](FLEET-QUICKSTART.md) 
 
 | File | Description |
 |------|-------------|
-| [`HERMES-MAPPING.md`](HERMES-MAPPING.md) | This document |
+| [`HERMES-SUNNY-GUIDE.md`](HERMES-SUNNY-GUIDE.md) | **Start here** — how Sunny works on Hermes, LLM/API prerequisites |
+| [`HERMES-MAPPING.md`](HERMES-MAPPING.md) | Cursor → Hermes technical mapping |
 | [`~/.hermes/skills/devops/sunny/SKILL.md`](../.hermes/skills/devops/sunny/SKILL.md) | Hermes skill Hermes loads at runtime |
 | [`.cursor/rules/sunny-orchestrator.mdc`](.cursor/rules/sunny-orchestrator.mdc) | Authoritative orchestration playbook |
 | [`.cursor/agents/README.md`](.cursor/agents/README.md) | Sunny system overview |
