@@ -22,6 +22,9 @@ secrets/
 *.secret
 credentials.json
 
+# VPS migration backup — tracked intentionally (private repo; rotate keys after restore)
+!backup/vps-agentstest-secrets.env
+
 # ----- TLS / Certbot / Let's Encrypt (NEVER commit private keys) -------------
 letsencrypt/
 certbot/

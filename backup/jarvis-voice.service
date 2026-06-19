@@ -1,0 +1,18 @@
+[Unit]
+Description=Jarvis Voice + HUD Server for Hermes Agent
+After=network-online.target hermes-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/jarvis/server
+Environment=HOME=/root
+Environment=HERMES_HOME=/root/.hermes
+Environment=PATH=/root/.local/bin:/root/.hermes/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/jarvis/server/.venv/bin/python /opt/jarvis/server/server.py
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

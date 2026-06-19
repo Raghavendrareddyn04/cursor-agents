@@ -312,6 +312,10 @@ The whole system runs as a Docker Compose stack (PostgreSQL + registry + gateway
 
 ## Learn more
 
+- **[HERMES-JARVIS-SETUP.md](HERMES-JARVIS-SETUP.md)** — **full VPS guide:** install Hermes + Jarvis from scratch, wire Sunny, systemd, nginx, secrets, backup, troubleshooting.
+- **[HERMES-SUNNY-GUIDE.md](HERMES-SUNNY-GUIDE.md)** — how Sunny runs on Hermes (bridge, LLM prerequisites, invoke patterns).
+- **[HERMES-MAPPING.md](HERMES-MAPPING.md)** — Cursor ↔ Hermes technical mapping.
+- **[deploy/](deploy/)** — copy-paste templates: `hermes.env.example`, systemd units, nginx, Sunny bridge skill.
 - **[INSTALL.md](INSTALL.md)** — what to install (React, Java/JHipster, Docker, Graphify, …), VPS setup, `.gitignore`, GitHub clone/push workflow, edge cases.
 - [`.gitignore`](.gitignore) — never commit `.env`, `.sunny/`, `node_modules/`, `target/`, certs, `graphify-out/`.
 - [`.env.example`](.env.example) — reference template; the real `.env` is auto-generated with secrets by Maya at intake (copy only to override).

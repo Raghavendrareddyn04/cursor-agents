@@ -315,6 +315,7 @@ For multi-hour Sunny runs, use **gateway** or **tmux/screen** so the session sur
 
 | Path | Description |
 |------|-------------|
+| `/opt/cursor-agents/HERMES-JARVIS-SETUP.md` | Full Hermes + Jarvis install from scratch |
 | `/opt/cursor-agents/HERMES-SUNNY-GUIDE.md` | This guide |
 | `/opt/cursor-agents/HERMES-MAPPING.md` | Cursor ↔ Hermes technical mapping |
 | `/opt/cursor-agents/.cursor/rules/sunny-orchestrator.mdc` | Authoritative playbook |
