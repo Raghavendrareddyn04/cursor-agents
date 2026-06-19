@@ -336,6 +336,45 @@ The VPS must have everything in sections 4–9 so agents can **build, test, and 
 
 ---
 
+## 11b. Production deployment prerequisites (Minikube / Helm / Grafana)
+
+Suresh (`server-provision-agent`) installs these automatically during the production deployment stage, but pre-installing them on the VPS speeds up the first run. The full runbook lives in [`deploy/README.md`](deploy/README.md).
+
+```bash
+# Minikube + kubectl + a container runtime (docker driver)
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+# Helm 3
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Kubernetes CLI
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install kubectl /usr/local/bin/kubectl
+
+# PM2 (for frontend hosting on the host)
+npm install -g pm2
+```
+
+Verify the host is ready:
+
+```bash
+minikube version    # >= 1.32
+helm version        # >= 3.13
+kubectl version --client
+pm2 --version
+docker --version    # already in section 5
+```
+
+If the host has fewer than **4 CPU / 8 GB RAM** available to Minikube, lower the profile in `.env`:
+
+```bash
+MINIKUBE_CPUS=2
+MINIKUBE_MEMORY=4096
+```
+
+---
+
 ## 12. First-time checklist (copy/paste)
 
 ```bash

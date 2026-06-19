@@ -14,14 +14,19 @@ A complete, presentation-ready reference for **every agent** in the Sunny multi-
 - **Exit phrase** — the exact string a verify agent emits when its loop is satisfied. The orchestrator matches it literally to advance.
 - **Loop** — generate → verify → fix → re-verify, capped at **5 iterations** per loop before Sunny marks the stage `needs-attention` and continues where possible.
 
-**System totals:** 54 orchestrated agents + 2 standalone (`documentation`, `fleet-host-agent`) · 18 verify/fix loops · 18 readonly auditors.
+**System totals:** ~74 orchestrated agents + 2 standalone (`documentation`, `fleet-host-agent`) · 25 verify/fix loops · 25 readonly auditors.
 
 **Pipeline order:**
 
 ```
-Frontend sanitization → Architecture → Backend (JHipster) → Database → Nginx & SSL (domain + Certbot)
-→ Backend tests → Frontend tests → System integration tests → Swagger → Javadoc
-→ API collection → API tests → API performance → Production
+Frontend sanitization (Isha) → Architecture (Arjun) → Supabase removal (Kiran)
+→ Backend (JHipster, Vikram) → Database (Dhruv) → Nginx & SSL (Naveen)
+→ Backend tests → Frontend tests → System integration tests
+→ Swagger → Javadoc → API collection → API tests → API performance
+→ Production audit (Prakash, #16)
+→ Deploy platform (Rajesh) → Provision (Suresh) → Deploy DB (Lakshmi)
+→ Deploy backend (Manoj) → Deploy edge (Asha) → Final deploy verify (Om)
+→ Live (https://<project-domain>/)
 ```
 
 ## Graphify (token-efficient context)
@@ -306,6 +311,77 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
+## Stages 16–22 — Production deployment (VPS / Minikube)
+
+Runs **only after** `Final approval granted. System is production-ready.` Six sub-stages each follow **generate → verify → fix** (cap 5); the final stage is **verify → fix only** (Om). Same pattern as database and nginx.
+
+| Step | Generate | Verify | Fix | Exit phrase |
+|------|----------|--------|-----|-------------|
+| 16 Platform | Rajesh — `deployment-platform-agent` | Rajesh Verify | Rajesh Fix | `Deployment platform approved.` |
+| 17 Provision | Suresh — `server-provision-agent` | Suresh Verify | Suresh Fix | `Server provisioning approved.` |
+| 18 Database | Lakshmi — `deployment-database-agent` | Lakshmi Verify | Lakshmi Fix | `Deployment database approved.` |
+| 19 Backend | Manoj — `deployment-backend-agent` | Manoj Verify | Manoj Fix | `Deployment backend approved.` |
+| 20 Edge | Asha — `deployment-edge-agent` | Asha Verify | Asha Fix | `Deployment edge approved.` |
+| 21 Final | Om — `deployment-verify-agent` | Om | Om Fix | `Production deployment verified. System is live.` |
+
+### Rajesh — Deployment Platform Agent (`deployment-platform-agent`) · not readonly
+- Brings up the production platform: Minikube production profile, kube-prometheus-stack, Grafana + Sunny `progress.json` integration, and the entire `deploy/` scaffold (manifests, dashboards, scripts). Pre-authorized to install host tools; never asks the user for install permission. Targeted fix on failure (no `rm -rf` / `minikube delete` loops).
+- **Produces:** `deployment-platform-summary.md`.
+
+### Rajesh Verify — `deployment-platform-verify-agent` · readonly
+- Audits Minikube, Helm, kube-prometheus-stack, Grafana provisioning, K8s skeleton. **Exit phrase:** `Deployment platform approved.`
+
+### Rajesh Fix — `deployment-platform-fix-agent` · not readonly
+- Closes platform verify findings without delete-redownload loops.
+
+### Suresh — Server Provisioning Agent (`server-provision-agent`) · not readonly
+- Installs VPS host dependencies (Java, Node, PostgreSQL client, Nginx, PM2, Docker, Minikube prereqs) via `deploy/scripts/provision.sh`. Idempotent — re-running is a safe no-op.
+- **Produces:** `server-provision-summary.md`.
+
+### Suresh Verify — `server-provision-verify-agent` · readonly
+- Verifies every host tool is installed and prefetched. **Exit phrase:** `Server provisioning approved.`
+
+### Suresh Fix — `server-provision-fix-agent` · not readonly
+- Closes provisioning findings without destructive reinstalls.
+
+### Lakshmi — Deployment Database Agent (`deployment-database-agent`) · not readonly
+- Creates and hardens production PostgreSQL on the VPS host; generates/accepts `POSTGRES_PASSWORD` and records it in `.env` (never echoed). Documents the chosen host alias in `deployment-database-summary.md`.
+- **Produces:** `deployment-database-summary.md`.
+
+### Lakshmi Verify — `deployment-database-verify-agent` · readonly
+- Verifies the production DB, schema, and that `deploy/scripts/sync-secrets.sh` wired the K8s `sunny-postgres` secret. **Exit phrase:** `Deployment database approved.`
+
+### Lakshmi Fix — `deployment-database-fix-agent` · not readonly
+- Closes deployment DB findings.
+
+### Manoj — Deployment Backend Agent (`deployment-backend-agent`) · not readonly
+- Deploys every JHipster microservice to Minikube: Deployment + Service + ConfigMap + ServiceMonitor per service, with **liveness + readiness + startup probes**, **CPU/memory requests + limits**, distinct ports, and ClusterIP (no public NodePort for internal services). Completes the per-service rows in `deploy/port-map.md`. Uses `kubectl apply -k deploy/minikube/`.
+- **Produces:** `deployment-backend-summary.md`.
+
+### Manoj Verify — `deployment-backend-verify-agent` · readonly
+- Verifies pods, probes, limits, distinct ports, Prometheus scrape annotations, and that `port-map.md` matches live state. **Exit phrase:** `Deployment backend approved.`
+
+### Manoj Fix — `deployment-backend-fix-agent` · not readonly
+- Closes backend deploy findings.
+
+### Asha — Deployment Edge Agent (`deployment-edge-agent`) · not readonly
+- Configures **host Nginx** (TLS via Certbot/Let's Encrypt), **PM2** for the rebuilt frontend, and the routes: `/` → PM2 frontend, `/api` → Minikube gateway NodePort, `/progress.json` + `/agentprogress.html` → static mount, `/grafana` → Grafana NodePort 30300. Verifies HTTPS works and the dashboard survives reloads.
+- **Produces:** `deployment-edge-summary.md`.
+
+### Asha Verify — `deployment-edge-verify-agent` · readonly
+- Verifies routing, TLS, PM2, `/grafana` proxy. **Exit phrase:** `Deployment edge approved.`
+
+### Asha Fix — `deployment-edge-fix-agent` · not readonly
+- Closes edge findings.
+
+### Om — Deployment Verify Agent (`deployment-verify-agent`) · readonly
+- **Final** collective production audit: confirms all five prior per-step exit phrases, runs `deploy/scripts/health-check.sh` (kubectl/minikube, pod readiness, gateway `/management/health`, public `/api`, Grafana `/api/health`, progress.json), and verifies live state matches `deploy/port-map.md`. **Exit phrase:** `Production deployment verified. System is live.`
+
+### Om Fix — `om-fix-agent` · not readonly
+- Closes cross-cutting Om findings without weakening production controls.
+
+---
+
 ## Standalone (not orchestrated by Sunny)
 
 ### Deepa — Documentation Agent (`documentation`) · not readonly
@@ -377,5 +453,25 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 | Pawan Fix | `api-performance-test-fix-agent` | No | — |
 | Prakash | `production-standards-agent` | Yes | `Final approval granted. System is production-ready.` |
 | Prakash Fix | `production-fix-agent` | No | — |
+| Kiran | `supabase-removal-agent` | No | — |
+| Kiran Verify | `supabase-removal-verify-agent` | Yes | `Supabase and Lovable removal complete.` |
+| Kiran Fix | `supabase-removal-fix-agent` | No | — |
+| Rajesh | `deployment-platform-agent` | No | — |
+| Rajesh Verify | `deployment-platform-verify-agent` | Yes | `Deployment platform approved.` |
+| Rajesh Fix | `deployment-platform-fix-agent` | No | — |
+| Suresh | `server-provision-agent` | No | — |
+| Suresh Verify | `server-provision-verify-agent` | Yes | `Server provisioning approved.` |
+| Suresh Fix | `server-provision-fix-agent` | No | — |
+| Lakshmi | `deployment-database-agent` | No | — |
+| Lakshmi Verify | `deployment-database-verify-agent` | Yes | `Deployment database approved.` |
+| Lakshmi Fix | `deployment-database-fix-agent` | No | — |
+| Manoj | `deployment-backend-agent` | No | — |
+| Manoj Verify | `deployment-backend-verify-agent` | Yes | `Deployment backend approved.` |
+| Manoj Fix | `deployment-backend-fix-agent` | No | — |
+| Asha | `deployment-edge-agent` | No | — |
+| Asha Verify | `deployment-edge-verify-agent` | Yes | `Deployment edge approved.` |
+| Asha Fix | `deployment-edge-fix-agent` | No | — |
+| Om | `deployment-verify-agent` | Yes | `Production deployment verified. System is live.` |
+| Om Fix | `om-fix-agent` | No | — |
 | Deepa | `documentation` | No | — (standalone) |
 | Hari | `fleet-host-agent` | No | — (standalone; deploys global dashboard) |

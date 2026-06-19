@@ -10,7 +10,7 @@ A practical guide: what happens when you say **"Sunny, build the backend…"** t
 
 | Piece | What it is | Where it lives |
 |-------|------------|----------------|
-| **cursor-agents** | Sunny agent **definitions** (62 specialists: Arjun, Vikram, Naveen, …) + orchestration **playbook** | `/opt/cursor-agents/.cursor/` |
+| **cursor-agents** | Sunny agent **definitions** (82 specialists: Arjun, Isha, Vikram, Naveen, Prakash, Rajesh, …) + orchestration **playbook** (22 stages: build #1–#16 + deploy tail #17–#22) | `/opt/cursor-agents/.cursor/` |
 | **Hermes Agent** | The **runtime** that actually runs tools (terminal, files, web, delegate sub-tasks) | `/root/.hermes/` |
 | **Sunny bridge skill** | Instructions that tell Hermes *"act like Sunny and follow the playbook"* | `/root/.hermes/skills/devops/sunny/SKILL.md` |
 
@@ -57,7 +57,7 @@ flowchart TD
   Maya --> State[.sunny/context/state.json]
   State --> Next{More stages?}
   Next -->|yes| Stage
-  Next -->|no| Done[Production approved]
+  Next -->|no| Done[Production approved → deployment tail (Rajesh → Suresh → Lakshmi → Manoj → Asha → Om) → Live]
 ```
 
 1. Recognizes **Sunny** (skill trigger or natural language).
@@ -120,7 +120,7 @@ hermes doctor      # must show "API key or custom endpoint configured"
 ### 2. cursor-agents repo (required)
 
 ```bash
-ls /opt/cursor-agents/.cursor/agents/   # 62 agent .md files
+ls /opt/cursor-agents/.cursor/agents/   # 82 agent .md files (62 build + 20 deploy/Kiran)
 ```
 
 Hermes reads agents from here — **not** from inside your app repo unless you symlink.
@@ -286,7 +286,7 @@ For multi-hour Sunny runs, use **gateway** or **tmux/screen** so the session sur
 ## Checklist before "Sunny, build…"
 
 - [ ] `hermes doctor` — LLM API configured  
-- [ ] `/opt/cursor-agents/.cursor/agents/` exists (62 files)  
+- [ ] `/opt/cursor-agents/.cursor/agents/` exists (82 files: 62 build + 20 deploy)  
 - [ ] Project `.cursor` → symlink to cursor-agents  
 - [ ] `hermes config` → `terminal.cwd` = project root  
 - [ ] `graphify .` run once in project  
@@ -326,7 +326,7 @@ For multi-hour Sunny runs, use **gateway** or **tmux/screen** so the session sur
 ## Summary
 
 - You call **Sunny** on **Hermes** — not a separate Hermes agent roster.  
-- **cursor-agents** supplies the 62 specialist definitions; **Hermes** runs them via **`delegate_task`**.  
+- **cursor-agents** supplies the 82 specialist definitions (62 build + 20 deploy); **Hermes** runs them via **`delegate_task`**.  
 - The **bridge skill** connects the two; it does not duplicate agents.  
 - You **must** configure a **Hermes LLM API** (`hermes setup`) plus **Docker**, **graphify**, and **DNS** for a full backend build.  
 - **ElevenLabs** / **Jarvis** are optional voice layers on Hermes — not required for Sunny pipeline logic.

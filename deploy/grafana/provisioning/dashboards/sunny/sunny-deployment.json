@@ -1,0 +1,67 @@
+{
+  "title": "Sunny Deployment",
+  "uid": "sunny-deployment",
+  "tags": ["sunny", "deployment", "production"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "60s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Pipeline — stages done",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "SunnyProgress" },
+      "targets": [{ "refId": "A", "type": "json", "source": "url", "url": "/progress.json", "root_selector": "counts.done" }],
+      "description": "From https://<domain>/progress.json — same feed as agentprogress.html"
+    },
+    {
+      "id": 2,
+      "title": "Pipeline — current stage",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "SunnyProgress" },
+      "targets": [{ "refId": "A", "type": "json", "source": "url", "url": "/progress.json", "root_selector": "currentStageLabel" }]
+    },
+    {
+      "id": 3,
+      "title": "Gateway JVM heap",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "jvm_memory_used_bytes{area=\"heap\",namespace=\"sunny-prod\",job=~\".*gateway.*\"}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP 5xx rate (gateway)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{namespace=\"sunny-prod\",status=~\"5..\"}[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pod restarts (sunny-prod)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"sunny-prod\"})"
+        }
+      ]
+    }
+  ]
+}

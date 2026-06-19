@@ -11,6 +11,7 @@ At the center is **Sunny**, an orchestrator that coordinates specialized agents 
 This repository contains **agent definitions and orchestration rules** for Cursor — not application code. Point the agents at a frontend project and they produce and validate the backend.
 
 ```
+bin/                                # Bootstrap scripts (start-sunny.sh, smoke-test-deploy.sh)
 .cursor/
 ├── rules/
 │   ├── sunny-orchestrator.mdc      # Executable playbook the orchestrator follows
@@ -85,6 +86,26 @@ INSTALL.md                            # Prerequisites, VPS setup, Git workflow, 
 ```
 
 At runtime, the Context Agent creates a `.sunny/context/` store that acts as shared memory across agent runs.
+
+---
+
+## Quickstart (one command)
+
+```bash
+git clone <this repo> mememates-backend-agent && cd mememates-backend-agent
+./bin/start-sunny.sh --domain=app.example.com --fleet=fleet.example.com
+#  → follow the prompts; script sets up .env, clones the frontend (if configured),
+#     runs the Phase −2 self-test, and prints the exact kickoff line for your AI
+
+# Then in your AI assistant (Cursor / Claude Code / etc.):
+#   "start sunny with domain app.example.com and fleet fleet.example.com"
+
+# Right before Phase 5 (production deploy), verify the VPS is reachable:
+./bin/smoke-test-deploy.sh --vps=1.2.3.4 --user=ubuntu --domain=app.example.com
+#  → PASS = Rajesh can launch; FAIL = fix the items, re-run
+```
+
+See [`bin/README.md`](bin/README.md) for flags, idempotency guarantees, and CI usage. On Windows use `bin\start-sunny.bat` (wraps the same `.sh` via WSL or Git-Bash).
 
 ---
 
@@ -310,10 +331,90 @@ The whole system runs as a Docker Compose stack (PostgreSQL + registry + gateway
 
 ---
 
+## Production deployment (VPS / Minikube)
+
+After the production audit (Prakash) emits `Final approval granted. System is production-ready.`, Sunny continues into the **production deployment tail** — six sub-stages that bring the system live on the VPS with Minikube, Grafana, host Nginx, PM2, and PostgreSQL. Each sub-stage follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage.
+
+| # | Codename | What it does | Exit phrase |
+|---|----------|--------------|-------------|
+| 16 | **Prakash** | Production audit (gate) | `Final approval granted. System is production-ready.` |
+| 17 | **Rajesh** | Minikube + kube-prometheus-stack + Grafana + `deploy/` scaffold | `Deployment platform approved.` |
+| 18 | **Suresh** | VPS host deps (Java, Node, Postgres, Nginx, PM2, Docker) | `Server provisioning approved.` |
+| 19 | **Lakshmi** | Production PostgreSQL on VPS; wires K8s secret | `Deployment database approved.` |
+| 20 | **Manoj** | Minikube Deployments/Services/ServiceMonitors per microservice | `Deployment backend approved.` |
+| 21 | **Asha** | Host Nginx (TLS via Certbot) + PM2 frontend + `/api` routing | `Deployment edge approved.` |
+| 22 | **Om** | End-to-end audit + `health-check.sh` + port-map match | `Production deployment verified. System is live.` |
+
+**Topology** (see [`deploy/README.md`](deploy/README.md) for the full operator guide):
+
+```
+Internet
+   │
+   ▼
+Host Nginx (TLS via Certbot) ──► PM2 frontend (static SPA)
+   │ /api                       └── VITE_API_URL → https://<domain>/api
+   │
+Minikube NodePort (gateway :30080)
+   │
+   ├── JHipster Gateway pod
+   ├── Microservice pods (ClusterIP, distinct ports)
+   ├── JHipster Registry pod
+   │
+Host PostgreSQL ◄── datasource from pods (host.min.internal:5432)
+
+Minikube observability namespace
+   ├── Prometheus (scrapes /management/prometheus)
+   └── Grafana (dashboards + Sunny progress.json panel via Infinity datasource)
+```
+
+**Operator commands** (full order in `deploy/README.md`):
+
+```bash
+# Rajesh — order matters
+kubectl apply -f deploy/minikube/namespace.yaml
+kubectl apply -f deploy/minikube/resource-quota.yaml
+./deploy/scripts/sync-secrets.sh          # grafana-admin secret before Helm
+minikube start --cpus=4 --memory=8192 --driver=docker
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n observability -f deploy/helm/kube-prometheus-stack-values.yaml
+
+# Lakshmi
+./deploy/scripts/sync-secrets.sh          # re-run after POSTGRES_PASSWORD set
+
+# Manoj
+eval $(minikube docker-env)
+kubectl apply -k deploy/minikube/
+
+# Om — final audit
+./deploy/scripts/health-check.sh
+```
+
+**Production non-negotiables** (enforced by the deploy-agent family):
+
+- Minikube production profile, `sunny-prod` namespace with CPU/memory quotas.
+- kube-prometheus-stack with `Infinity` datasource for Sunny `progress.json`.
+- Every microservice pod: liveness + readiness + startup probes, CPU/memory requests + limits, ServiceMonitor for Prometheus.
+- `deploy/port-map.md` is the **authoritative port matrix** — Rajesh seeds, Manoj completes, Om verifies live state matches.
+- Host Nginx fronts everything: `/` → PM2, `/api` → Minikube gateway, `/grafana` → Grafana, `/progress.json` + `/agentprogress.html` → static mount.
+- `deploy/scripts/health-check.sh` must be **green** before Om emits its final exit phrase.
+
+**Authoritative files** under [`deploy/`](deploy/):
+
+- `deploy/README.md` — operator runbook, topology, port matrix, prod rules.
+- `deploy/port-map.md` — service → port → NodePort → health endpoint.
+- `deploy/minikube/` — namespace, resource quota, kustomization.
+- `deploy/helm/kube-prometheus-stack-values.yaml` — Grafana NodePort 30300, Prometheus retention, Infinity plugin.
+- `deploy/grafana/provisioning/` — datasources + dashboards as code (Sunny deployment dashboard).
+- `deploy/scripts/{provision.sh, sync-secrets.sh, health-check.sh}` — host-deps installer, K8s secret writer, Om's verification script.
+
+---
+
 ## Learn more
 
-- **[INSTALL.md](INSTALL.md)** — what to install (React, Java/JHipster, Docker, Graphify, …), VPS setup, `.gitignore`, GitHub clone/push workflow, edge cases.
-- [`.gitignore`](.gitignore) — never commit `.env`, `.sunny/`, `node_modules/`, `target/`, certs, `graphify-out/`.
+- **[INSTALL.md](INSTALL.md)** — what to install (React, Java/JHipster, Docker, Minikube, Helm, Grafana, Graphify, …), VPS setup, `.gitignore`, GitHub clone/push workflow, edge cases.
+- **[FLEET-QUICKSTART.md](FLEET-QUICKSTART.md)** — multi-VPS fleet dashboard deployment (Hari runs the central collector on the fleet host).
+- **[deploy/README.md](deploy/README.md)** — production deployment operator guide (Rajesh/Suresh/Lakshmi/Manoj/Asha/Om).
+- [`.gitignore`](.gitignore) — never commit `.env`, `.sunny/`, `node_modules/`, `target/`, certs, `graphify-out/`, `deploy/.secrets/`.
 - [`.env.example`](.env.example) — reference template; the real `.env` is auto-generated with secrets by Maya at intake (copy only to override).
 - [`.cursor/agents/AGENT-GUIDE.md`](.cursor/agents/AGENT-GUIDE.md) — what every single agent does, clearly explained.
 - [`.cursor/agents/README.md`](.cursor/agents/README.md) — how the Sunny system works, phase by phase.

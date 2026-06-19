@@ -580,13 +580,76 @@ The production agent first runs a **completeness audit of every prior stage** (e
 flowchart LR
     A["production-standards-agent<br/>audits ALL prior outputs<br/>+ comprehensive final report"] --> B["context-agent<br/>production-report.md"]
     B --> C{"lastVerdict ==<br/>'Final approval granted.<br/>System is production-ready.'?"}
-    C -->|Yes| Exit([Final Approval])
+    C -->|Yes| DEPLOY[Deployment tail #17-#22]
     C -->|No| D{productionVerifyIterations<br/>>= 5?}
     D -->|Yes| Stop([Needs attention<br/>continue if possible])
     D -->|No| E[production-fix-agent]
     E --> F["context-agent<br/>production-fix-log.md"]
     F --> A
 ```
+
+On `Final approval granted.`, Sunny does **not** mark `phase: complete` — it advances into the **production deployment tail** (stages #17–#22) and only marks complete when Om emits `Production deployment verified. System is live.`
+
+---
+
+## 6.5 Production deployment tail (stages #17–#22)
+
+After the production audit passes, Sunny automatically runs **six** deploy sub-stages on the VPS. Each follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage. The final stage (Om) is verify/fix only.
+
+```mermaid
+flowchart LR
+    P["Prakash ✓<br/>'Final approval granted.'"] --> R["#17 Rajesh<br/>Minikube + Helm + Grafana + deploy/ scaffold"]
+    R -->|issues| RFix[Rajesh Fix] --> R
+    R -->|"Deployment platform approved."| Su["#18 Suresh<br/>VPS host deps (provision.sh)"]
+    Su -->|issues| SuFix[Suresh Fix] --> Su
+    Su -->|"Server provisioning approved."| L["#19 Lakshmi<br/>Production PostgreSQL + K8s secret"]
+    L -->|issues| LFix[Lakshmi Fix] --> L
+    L -->|"Deployment database approved."| M["#20 Manoj<br/>Minikube Deployments/Services/ServiceMonitors"]
+    M -->|issues| MFix[Manoj Fix] --> M
+    M -->|"Deployment backend approved."| As["#21 Asha<br/>Host Nginx TLS + PM2 + /api routing"]
+    As -->|issues| AsFix[Asha Fix] --> As
+    As -->|"Deployment edge approved."| O["#22 Om<br/>health-check.sh + port-map match"]
+    O -->|issues| OFix[Om Fix] --> O
+    O -->|"Production deployment verified. System is live."| Live([Live at https://project-domain/])
+```
+
+**Production topology** (deployed by the agents above; full spec in [`deploy/README.md`](../../deploy/README.md)):
+
+```
+Internet
+   │
+   ▼
+Host Nginx (Certbot TLS, Asha) ──► PM2 frontend (static SPA)
+   │                                   │
+   │ /api                              └── VITE_API_URL → https://<domain>/api
+   │ /grafana  ──► Grafana NodePort 30300
+   │ /progress.json + /agentprogress.html ──► .sunny/web static mount
+   ▼
+Minikube NodePort (gateway :30080)
+   │
+   ├── JHipster Gateway pod
+   ├── Microservice pods (ClusterIP, distinct ports, probes + limits, ServiceMonitor)
+   ├── JHipster Registry pod
+   │
+   ▼
+Host PostgreSQL  ◄── JDBC host.min.internal:5432 (Minikube docker driver)
+                       ▲
+                       └── SPRING_DATASOURCE_URL from sunny-postgres K8s secret (sync-secrets.sh)
+
+Minikube observability namespace
+   ├── Prometheus (kube-prometheus-stack; scrapes /management/prometheus)
+   └── Grafana (Sunny deployment dashboard; Infinity datasource → /progress.json)
+```
+
+**Authoritative files** under `deploy/`:
+
+- `deploy/README.md` — operator runbook.
+- `deploy/port-map.md` — service → port → NodePort → health endpoint (Rajesh seeds, Manoj completes, Om verifies).
+- `deploy/minikube/{namespace.yaml, resource-quota.yaml, kustomization.yaml}` — `sunny-prod` namespace + CPU/memory quotas.
+- `deploy/helm/kube-prometheus-stack-values.yaml` — Grafana NodePort 30300, Infinity plugin, Prometheus retention, resource limits.
+- `deploy/grafana/provisioning/dashboards/sunny/sunny-deployment.json` — provisioned dashboard.
+- `deploy/grafana/provisioning/datasources/datasources.yaml` — Prometheus + Sunny progress.json.
+- `deploy/scripts/{provision.sh, sync-secrets.sh, health-check.sh}` — Suresh's installer, Lakshmi/Manoj's K8s-secret writer, Om's verifier.
 
 ---
 
@@ -1127,4 +1190,10 @@ stateDiagram-v2
 | **System integration exit** | `System integration testing requirements satisfied.` |
 | **Doc/API exits** | `Swagger documentation requirements satisfied.` / `Javadoc documentation requirements satisfied.` / `API collection requirements satisfied.` / `API testing requirements satisfied.` / `API performance testing requirements satisfied.` |
 | **Production exit** | `Final approval granted. System is production-ready.` |
-| **Max iterations** | Default 5 per loop; each loop has its own counter (`frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six `backend/frontend{Unit,Integration,Functional}TestVerifyIterations`; `systemIntegrationTestVerifyIterations`; the five `swagger/javadoc/apiCollection/apiTest/apiPerformanceTestVerifyIterations`; `productionVerifyIterations`); exceeding it marks the stage `needs-attention` **before** launching the fix agent again and continues wherever technically possible. `phase = blocked` is reserved for a hard dependency that makes the next stage impossible. |
+| **Deploy platform exit** | `Deployment platform approved.` |
+| **Server provisioning exit** | `Server provisioning approved.` |
+| **Deployment database exit** | `Deployment database approved.` |
+| **Deployment backend exit** | `Deployment backend approved.` |
+| **Deployment edge exit** | `Deployment edge approved.` |
+| **Deployment final exit** | `Production deployment verified. System is live.` |
+| **Max iterations** | Default 5 per loop; each loop has its own counter (`frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `supabaseRemovalVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six `backend/frontend{Unit,Integration,Functional}TestVerifyIterations`; `systemIntegrationTestVerifyIterations`; the five `swagger/javadoc/apiCollection/apiTest/apiPerformanceTestVerifyIterations`; `productionVerifyIterations`; the six `deploymentPlatformVerifyIterations` / `serverProvisionVerifyIterations` / `deploymentDatabaseVerifyIterations` / `deploymentBackendVerifyIterations` / `deploymentEdgeVerifyIterations` / `deploymentVerifyIterations`); exceeding it marks the stage `needs-attention` **before** launching the fix agent again and continues wherever technically possible. `phase = blocked` is reserved for a hard dependency that makes the next stage impossible. |

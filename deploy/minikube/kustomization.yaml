@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sunny-prod
+resources:
+  - namespace.yaml
+  - resource-quota.yaml
+  - service-template.yaml   # Manoj copies and renames per microservice (e.g. deployment-users.yaml, deployment-orders.yaml)
+  # Manoj adds per-service: deployment-{microservice}.yaml, service-{microservice}.yaml,
+  # servicemonitor-{microservice}.yaml, configmap-{microservice}.yaml

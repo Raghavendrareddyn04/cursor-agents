@@ -1,0 +1,54 @@
+# kube-prometheus-stack values for Sunny production (Minikube VPS)
+# Rajesh customizes CPU/memory/disk for the host. Secrets via existingSecret — never commit passwords.
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: NodePort
+    nodePort: 30300
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana/"
+      serve_from_sub_path: true
+  # Required for Sunny progress.json panels (datasources.yaml + sunny-deployment.json)
+  plugins:
+    - yesoreyeram-infinity-datasource
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+    datasources:
+      enabled: true
+  persistence:
+    enabled: true
+    size: 5Gi
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 8GB
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+alertmanager:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+# metrics-server is enabled via minikube addon; stack still benefits from kube-state-metrics

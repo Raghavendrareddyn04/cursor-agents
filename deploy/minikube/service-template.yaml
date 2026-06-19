@@ -1,0 +1,135 @@
+# Service template Manoj copies per microservice.
+# Replace {MICROSERVICE} with the JHipster service name (e.g. "users", "orders").
+# Apply with `kubectl apply -k deploy/minikube/` after editing.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {microservice}
+  namespace: sunny-prod
+  labels:
+    app: {microservice}
+    app.kubernetes.io/part-of: sunny
+    app.kubernetes.io/component: microservice
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: {microservice}
+  template:
+    metadata:
+      labels:
+        app: {microservice}
+      annotations:
+        # Required for Prometheus scrape (kube-prometheus-stack)
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /management/prometheus
+        prometheus.io/port: "8080"
+    spec:
+      # Production pods must NOT run as root (Pod Security Admission "restricted" on sunny-prod)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {microservice}
+          image: REPLACE_IMAGE
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: jhipster-jwt
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: sunny-postgres
+                  key: SPRING_DATASOURCE_URL
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sunny-postgres
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sunny-postgres
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          # Startup probe gives JVM up to 120s to boot before liveness kicks in.
+          startupProbe:
+            httpGet:
+              path: /management/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /management/health/liveness
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /management/health/readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {microservice}
+  namespace: sunny-prod
+  labels:
+    app: {microservice}
+spec:
+  type: ClusterIP
+  selector:
+    app: {microservice}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {microservice}
+  namespace: sunny-prod
+  labels:
+    app: {microservice}
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: {microservice}
+  endpoints:
+    - port: http
+      path: /management/prometheus
+      interval: 30s

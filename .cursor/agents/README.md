@@ -79,6 +79,26 @@ These constraints are enforced by every relevant agent:
 | 54 | **API Performance Test Fix Agent** | `api-performance-test-fix-agent.md` | Remediates performance breaches | No |
 | 55 | **Production Standards Agent** | `production-standards-agent.md` | Audits all prior outputs + final security/readiness audit + comprehensive report | Yes |
 | 56 | **Production Fix Agent** | `production-fix-agent.md` | Remediates production audit findings | No |
+| 57 | **Supabase Removal Agent** | `supabase-removal-agent.md` | Strips direct Supabase calls from generated code; replaces with REST clients matching the approved API contract | No |
+| 58 | **Supabase Removal Verify Agent** | `supabase-removal-verify-agent.md` | Audits zero Supabase remnants in src + green build | Yes |
+| 59 | **Supabase Removal Fix Agent** | `supabase-removal-fix-agent.md` | Closes Supabase removal findings; wires proper REST clients | No |
+| 60 | **Deployment Platform Agent** | `deployment-platform-agent.md` | Installs Minikube + kubectl + Helm + kube-prometheus-stack + Grafana on the VPS | No |
+| 61 | **Deployment Platform Verify Agent** | `deployment-platform-verify-agent.md` | Audits Minikube / Helm / Grafana / `progress.json` wiring | Yes |
+| 62 | **Deployment Platform Fix Agent** | `deployment-platform-fix-agent.md` | Closes platform / observability findings | No |
+| 63 | **Server Provision Agent** | `server-provision-agent.md` | Installs host deps (Java/Node/Docker/PM2/Nginx) on the VPS; opens firewall ports | No |
+| 64 | **Server Provision Verify Agent** | `server-provision-verify-agent.md` | Audits host toolchain versions + ports open | Yes |
+| 65 | **Server Provision Fix Agent** | `server-provision-fix-agent.md` | Closes host dependency findings | No |
+| 66 | **Deployment Database Agent** | `deployment-database-agent.md` | Provisions production PostgreSQL on host; emits `host.min.internal:5432` alias for pods | No |
+| 67 | **Deployment Database Verify Agent** | `deployment-database-verify-agent.md` | Audits prod DB connectivity + schema sync | Yes |
+| 68 | **Deployment Database Fix Agent** | `deployment-database-fix-agent.md` | Closes prod DB findings | No |
+| 69 | **Deployment Backend Agent** | `deployment-backend-agent.md` | Builds images, applies K8s Deployments/Services/ServiceMonitors from `deploy/minikube/` | No |
+| 70 | **Deployment Backend Verify Agent** | `deployment-backend-verify-agent.md` | Audits pod readiness, ServiceMonitor scrape, port-map live state | Yes |
+| 71 | **Deployment Backend Fix Agent** | `deployment-backend-fix-agent.md` | Closes backend deploy findings | No |
+| 72 | **Deployment Edge Agent** | `deployment-edge-agent.md` | Configures host Nginx (TLS) + PM2 frontend + DNS + cert | No |
+| 73 | **Deployment Edge Verify Agent** | `deployment-edge-verify-agent.md` | Audits HTTPS + `progress.json` reachability + cert renewal | Yes |
+| 74 | **Deployment Edge Fix Agent** | `deployment-edge-fix-agent.md` | Closes edge findings | No |
+| 75 | **Deployment Verify Agent** | `deployment-verify-agent.md` | Final deployment audit (Om) — health-check, port-map, dashboards, smoke tests | Yes |
+| 76 | **Om Fix (deployment final-fix)** | `om-fix-agent.md` | Closes final deployment findings (Om) | No |
 
 ---
 
@@ -106,8 +126,15 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 | Tara (API tests) | Tara — `api-test-agent` | Tara Verify — `api-test-verify-agent` | Tara Fix — `api-test-fix-agent` |
 | Pawan (API performance) | Pawan — `api-performance-test-agent` | Pawan Verify — `api-performance-test-verify-agent` | Pawan Fix — `api-performance-test-fix-agent` |
 | Prakash (production) | — | Prakash — `production-standards-agent` | Prakash Fix — `production-fix-agent` |
+| Kiran (supabase removal) | Kiran — `supabase-removal-agent` | Kiran Verify — `supabase-removal-verify-agent` | Kiran Fix — `supabase-removal-fix-agent` |
+| Rajesh (deploy platform) | Rajesh — `deployment-platform-agent` | Rajesh Verify — `deployment-platform-verify-agent` | Rajesh Fix — `deployment-platform-fix-agent` |
+| Suresh (server provision) | Suresh — `server-provision-agent` | Suresh Verify — `server-provision-verify-agent` | Suresh Fix — `server-provision-fix-agent` |
+| Lakshmi (deploy database) | Lakshmi — `deployment-database-agent` | Lakshmi Verify — `deployment-database-verify-agent` | Lakshmi Fix — `deployment-database-fix-agent` |
+| Manoj (deploy backend) | Manoj — `deployment-backend-agent` | Manoj Verify — `deployment-backend-verify-agent` | Manoj Fix — `deployment-backend-fix-agent` |
+| Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
+| Om (deploy verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 
-**Singletons:** Sunny — `sunny` (orchestrator) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only orchestrator — covers all 22 stages end-to-end: build #1–#16 + deploy #17–#22) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 ---
 
@@ -136,42 +163,56 @@ flowchart TD
         ARCV[Architecture Verify Agent]
         ARCF[Architecture Fix Agent]
     end
-    subgraph dev [Stage 3 - Development]
+    subgraph kir [Stage 3 - Supabase Removal Loop]
+        KIR[Kiran — supabase-removal-agent]
+        KIRV[Kiran Verify — supabase-removal-verify-agent]
+        KIRF[Kiran Fix — supabase-removal-fix-agent]
+    end
+    subgraph dev [Stage 4 - Backend Build]
         BE[JHipster Backend Agent]
     end
-    subgraph verify [Stage 4 - Backend Verification Loop]
+    subgraph verify [Stage 5 - Backend Verification Loop]
         VER[JHipster Verify Agent]
         FIX[Issue Resolution Agent]
     end
-    subgraph db [Stage 5 - Database Loop]
+    subgraph db [Stage 6 - Database Loop]
         DBA[Database Agent]
         DBV[Database Verify Agent]
         DBF[Database Fix Agent]
     end
-    subgraph ngx [Stage 6 - Nginx & SSL Loop]
+    subgraph ngx [Stage 7 - Nginx & SSL Loop]
         NGA[Nginx Agent]
         NGV[Nginx Verify Agent]
         NGF[Nginx Fix Agent]
     end
-    subgraph btest [Stage 7 - Backend Testing - per-layer verify/fix loops]
+    subgraph btest [Stage 8 - Backend Testing - per-layer verify/fix loops]
         BGEN["unit + integration + functional<br/>test generation (once)"]
         BLAYERS["For each layer (unit -> integration -> functional):<br/>backend-{layer}-test-verify-agent<br/>-> [loop if gaps] backend-{layer}-test-fix-agent"]
     end
-    subgraph ftest [Stage 8 - Frontend Testing - per-layer verify/fix loops]
+    subgraph ftest [Stage 9 - Frontend Testing - per-layer verify/fix loops]
         FGEN["unit + integration + functional<br/>test generation (once)"]
         FLAYERS["For each layer (unit -> integration -> functional):<br/>frontend-{layer}-test-verify-agent<br/>-> [loop if gaps] frontend-{layer}-test-fix-agent"]
     end
-    subgraph sitest [Stage 9 - System Integration Testing - collective full-stack loop]
+    subgraph sitest [Stage 10 - System Integration Testing - collective full-stack loop]
         SIGEN["system-integration-test-agent<br/>(whole stack: frontend + backend + PostgreSQL)"]
         SILOOP["system-integration-test-verify-agent<br/>-> [loop if gaps] system-integration-test-fix-agent"]
     end
-    subgraph docapi [Stages 10-14 - Documentation & API loops]
+    subgraph docapi [Stages 11-15 - Documentation & API loops]
         DGEN["Swagger -> Javadoc -> API collection -> API tests -> API performance"]
         DLOOP["each stage: {stage}-agent -> {stage}-verify-agent<br/>-> [loop if gaps] {stage}-fix-agent"]
     end
-    subgraph prod [Stage 15 - Production Loop]
+    subgraph prod [Stage 16 - Production Audit Loop]
         PROD["Production Standards Agent<br/>(audits ALL prior outputs + final report)"]
         PFIX[Production Fix Agent]
+    end
+    subgraph deploy [Stages 17-22 - Deployment Tail (VPS / Minikube)]
+        RAJ["Rajesh — deployment-platform-agent<br/>(Minikube + kubectl + Helm + Grafana)"]
+        SUR["Suresh — server-provision-agent<br/>(host deps: Java/Node/Docker/PM2/Nginx)"]
+        LAK["Lakshmi — deployment-database-agent<br/>(host PostgreSQL)"]
+        MAN["Manoj — deployment-backend-agent<br/>(K8s Deployments/Services/ServiceMonitors)"]
+        ASH["Asha — deployment-edge-agent<br/>(host Nginx TLS + PM2 frontend)"]
+        OMV["Om — deployment-verify-agent<br/>(final health-check + port-map + smoke)"]
+        OMF["Om Fix — om-fix-agent"]
     end
 
     Sunny --> ISH
@@ -182,7 +223,11 @@ flowchart TD
     ARC --> ARCV
     ARCV -->|"issues"| ARCF
     ARCF --> ARCV
-    ARCV -->|"Architecture approved."| BE
+    ARCV -->|"Architecture approved."| KIR
+    KIR --> KIRV
+    KIRV -->|"issues"| KIRF
+    KIRF --> KIRV
+    KIRV -->|"Supabase removal complete."| BE
     BE --> VER
     VER -->|"Issues found"| FIX
     FIX --> VER
@@ -205,12 +250,23 @@ flowchart TD
     DLOOP -->|"all 5 doc/API stages satisfied"| PROD
     PROD -->|"findings"| PFIX
     PFIX --> PROD
-    PROD -->|"Final approval granted."| Final(["Final Approval<br/>System is production-ready."])
+    PROD -->|"Final approval granted."| RAJ
+    RAJ --> SUR
+    SUR --> LAK
+    LAK --> MAN
+    MAN --> ASH
+    ASH --> OMV
+    OMV -->|"findings"| OMF
+    OMF --> OMV
+    OMV -->|"Production deployment verified. System is live."| Live(["Live on https://&lt;domain&gt;<br/>Grafana + Sunny progress.json visible"])
 
     ARC -.persist.-> Ctx
     ISH -.persist.-> Ctx
     ISHV -.persist.-> Ctx
     ISHF -.persist.-> Ctx
+    KIR -.persist.-> Ctx
+    KIRV -.persist.-> Ctx
+    KIRF -.persist.-> Ctx
     BE -.persist.-> Ctx
     VER -.persist.-> Ctx
     FIX -.persist.-> Ctx
@@ -226,6 +282,13 @@ flowchart TD
     DLOOP -.persist.-> Ctx
     PROD -.persist.-> Ctx
     PFIX -.persist.-> Ctx
+    RAJ -.persist.-> Ctx
+    SUR -.persist.-> Ctx
+    LAK -.persist.-> Ctx
+    MAN -.persist.-> Ctx
+    ASH -.persist.-> Ctx
+    OMV -.persist.-> Ctx
+    OMF -.persist.-> Ctx
 ```
 
 ---
@@ -239,6 +302,7 @@ sequenceDiagram
     participant C as Context Agent
     participant ISH as Frontend Sanitize (gen+verify+fix)
     participant A as Architecture (gen+verify+fix)
+    participant KIR as Kiran — Supabase Removal (gen+verify+fix)
     participant B as Backend Agent
     participant V as Verify Agent
     participant IR as Issue Resolution
@@ -254,6 +318,12 @@ sequenceDiagram
     participant DAV as Doc/API Verifiers (5 stages)
     participant P as Production Standards
     participant PF as Production Fix
+    participant RAJ as Rajesh — Deployment Platform
+    participant SUR as Suresh — Server Provision
+    participant LAK as Lakshmi — Deployment Database
+    participant MAN as Manoj — Deployment Backend
+    participant ASH as Asha — Deployment Edge
+    participant OM as Om — Deployment Final Audit (verify+fix)
 
     U->>S: Frontend + requirements + domain + Certbot email
     S->>C: Intake (project-context.md, state.json, seed .sunny/web dashboard)
@@ -287,11 +357,25 @@ sequenceDiagram
         end
     end
 
-    Note over S,B: Stage 3 - Backend generation
+    Note over S,KIR: Stage 3 - Supabase removal loop (max 5)
+    S->>KIR: Strip direct Supabase calls; wire proper REST clients
+    S->>C: Persist supabase-removal-summary.md
+    loop Until "Supabase removal complete" or max iterations
+        S->>KIR: Verify zero Supabase remnants (readonly)
+        S->>C: Persist supabase-removal-verify-report.md
+        alt Not complete
+            S->>KIR: supabase-removal-fix-agent closes findings
+            S->>C: Persist supabase-removal-fix-log.md
+        else Supabase removal complete.
+            Note over S: Exit loop
+        end
+    end
+
+    Note over S,B: Stage 4 - Backend generation
     S->>B: Generate JHipster microservices
     S->>C: Persist backend-summary.md
 
-    Note over S,IR: Stage 4 - Verification loop (max 5)
+    Note over S,IR: Stage 5 - Verification loop (max 5)
     loop Until "Backend approved" or max iterations
         S->>V: Audit backend
         S->>C: Persist verify-report.md
@@ -303,7 +387,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,D: Stage 5 - Database loop (max 5)
+    Note over S,D: Stage 6 - Database loop (max 5)
     S->>D: Harden connections, schema, migrations
     S->>C: Persist database-summary.md
     loop Until "Database approved" or max iterations
@@ -317,7 +401,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,N: Stage 6 - Nginx & SSL edge (max 5)
+    Note over S,N: Stage 7 - Nginx & SSL edge (max 5)
     S->>N: Configure reverse proxy + domain + Certbot
     N-->>S: nginx-summary
     S->>C: Persist nginx-summary.md
@@ -333,7 +417,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,BTV: Stage 7 - Backend tests (generate once, per-layer loops, max 5 each)
+    Note over S,BTV: Stage 8 - Backend tests (generate once, per-layer loops, max 5 each)
     S->>BT: Generate unit, integration, functional
     S->>C: Persist backend-test-report.md
     loop For each layer: unit -> integration -> functional
@@ -347,7 +431,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,FTV: Stage 8 - Frontend tests (generate once, per-layer loops, max 5 each)
+    Note over S,FTV: Stage 9 - Frontend tests (generate once, per-layer loops, max 5 each)
     S->>FT: Generate unit, integration, functional
     S->>C: Persist frontend-test-report.md
     loop For each layer: unit -> integration -> functional
@@ -361,7 +445,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,SIV: Stage 9 - System integration tests (collective, max 5)
+    Note over S,SIV: Stage 10 - System integration tests (collective, max 5)
     S->>SI: Generate full-stack tests (frontend + backend + PostgreSQL)
     S->>C: Persist system-integration-test-report.md
     loop Until "System integration testing requirements satisfied" or max iterations
@@ -375,7 +459,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,DAV: Stages 10-14 - Documentation & API (in order, max 5 each)
+    Note over S,DAV: Stages 11-15 - Documentation & API (in order, max 5 each)
     loop For each stage: swagger -> javadoc -> api-collection -> api-test -> api-performance
         S->>DA: Generate stage artifacts
         S->>C: Persist {stage}-report.md
@@ -391,7 +475,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,PF: Stage 15 - Production loop (audits ALL prior outputs, max 5)
+    Note over S,PF: Stage 16 - Production loop (audits ALL prior outputs, max 5)
     loop Until "Final approval granted" or max iterations
         S->>P: Final audit
         S->>C: Persist production-report.md
@@ -402,7 +486,89 @@ sequenceDiagram
             Note over S: Exit loop
         end
     end
-    S->>U: Summary + run guide
+
+    Note over S,RAJ: Stage 17 - Deploy platform (Rajesh, max 5)
+    S->>RAJ: Install Minikube + kubectl + Helm + kube-prometheus-stack + Grafana
+    S->>C: Persist deployment-platform-summary.md
+    loop Until "Deployment platform approved" or max iterations
+        S->>RAJ: Verify platform toolchain (readonly)
+        S->>C: Persist deployment-platform-verify-report.md
+        alt Not approved
+            S->>RAJ: deployment-platform-fix-agent closes findings
+            S->>C: Persist deployment-platform-fix-log.md
+        else Deployment platform approved.
+            Note over S: Exit loop
+        end
+    end
+
+    Note over S,SUR: Stage 18 - Server provision (Suresh, max 5)
+    S->>SUR: Install host deps (Java/Node/Docker/PM2/Nginx); open firewall ports
+    S->>C: Persist server-provision-summary.md
+    loop Until "Server provisioning approved" or max iterations
+        S->>SUR: Verify host toolchain (readonly)
+        S->>C: Persist server-provision-verify-report.md
+        alt Not approved
+            S->>SUR: server-provision-fix-agent closes findings
+            S->>C: Persist server-provision-fix-log.md
+        else Server provisioning approved.
+            Note over S: Exit loop
+        end
+    end
+
+    Note over S,LAK: Stage 19 - Deploy database (Lakshmi, max 5)
+    S->>LAK: Provision host PostgreSQL; emit host.min.internal:5432 alias for pods
+    S->>C: Persist deployment-database-summary.md
+    loop Until "Deployment database approved" or max iterations
+        S->>LAK: Verify prod DB connectivity (readonly)
+        S->>C: Persist deployment-database-verify-report.md
+        alt Not approved
+            S->>LAK: deployment-database-fix-agent closes findings
+            S->>C: Persist deployment-database-fix-log.md
+        else Deployment database approved.
+            Note over S: Exit loop
+        end
+    end
+
+    Note over S,MAN: Stage 20 - Deploy backend (Manoj, max 5)
+    S->>MAN: Build images; apply K8s Deployments/Services/ServiceMonitors
+    S->>C: Persist deployment-backend-summary.md
+    loop Until "Deployment backend approved" or max iterations
+        S->>MAN: Verify pod readiness + ServiceMonitor scrape (readonly)
+        S->>C: Persist deployment-backend-verify-report.md
+        alt Not approved
+            S->>MAN: deployment-backend-fix-agent closes findings
+            S->>C: Persist deployment-backend-fix-log.md
+        else Deployment backend approved.
+            Note over S: Exit loop
+        end
+    end
+
+    Note over S,ASH: Stage 21 - Deploy edge (Asha, max 5)
+    S->>ASH: Host Nginx (TLS) + PM2 frontend + DNS + cert
+    S->>C: Persist deployment-edge-summary.md
+    loop Until "Deployment edge approved" or max iterations
+        S->>ASH: Verify HTTPS + progress.json reachability (readonly)
+        S->>C: Persist deployment-edge-verify-report.md
+        alt Not approved
+            S->>ASH: deployment-edge-fix-agent closes findings
+            S->>C: Persist deployment-edge-fix-log.md
+        else Deployment edge approved.
+            Note over S: Exit loop
+        end
+    end
+
+    Note over S,OM: Stage 22 - Deploy final audit (Om, max 5)
+    S->>OM: Final deployment audit (health-check, port-map, dashboards, smoke)
+    S->>C: Persist deployment-verify-report.md
+    loop Until "Production deployment verified. System is live." or max iterations
+        alt Findings
+            S->>OM: om-fix-agent closes findings
+            S->>C: Persist deployment-fix-log.md
+        else Production deployment verified. System is live.
+            Note over S: Exit loop
+        end
+    end
+    S->>U: Summary + run guide + Grafana URL + port-map + smoke results
 ```
 
 ---
@@ -415,6 +581,7 @@ The orchestrator looks for **exact** verdict phrases to exit each loop:
 |------|-------------|-----------|
 | Frontend sanitization | `Frontend sanitization complete.` | Frontend Sanitize Verify Agent |
 | Architecture | `Architecture approved.` | Architecture Verify Agent |
+| Supabase removal | `Supabase removal complete.` | Supabase Removal Verify Agent (Kiran Verify) |
 | Backend verification | `No issues found. Backend approved.` | JHipster Verify Agent |
 | Database | `Database approved.` | Database Verify Agent |
 | Nginx & SSL | `Nginx and SSL approved.` | Nginx Verify Agent |
@@ -431,8 +598,14 @@ The orchestrator looks for **exact** verdict phrases to exit each loop:
 | API tests | `API testing requirements satisfied.` | API Test Verify Agent |
 | API performance | `API performance testing requirements satisfied.` | API Performance Test Verify Agent |
 | Production | `Final approval granted. System is production-ready.` | Production Standards Agent |
+| Deployment platform | `Deployment platform approved.` | Deployment Platform Verify Agent (Rajesh Verify) |
+| Server provision | `Server provisioning approved.` | Server Provision Verify Agent (Suresh Verify) |
+| Deployment database | `Deployment database approved.` | Deployment Database Verify Agent (Lakshmi Verify) |
+| Deployment backend | `Deployment backend approved.` | Deployment Backend Verify Agent (Manoj Verify) |
+| Deployment edge | `Deployment edge approved.` | Deployment Edge Verify Agent (Asha Verify) |
+| Deployment final audit | `Production deployment verified. System is live.` | Deployment Verify Agent (Om) |
 
-Each loop has a **max-iteration cap (default 5)** tracked in `state.json`. Each loop has its own counter: `frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); and `productionVerifyIterations`. Stages run in order (frontend sanitization → architecture → backend → database → nginx & SSL → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production); within a side the layers run in order (unit → integration → functional). When findings occur, Sunny invokes **Leela** (`issues-log-agent`) to append `.sunny/KNOWN_ISSUES.md`. If any loop hits the cap without its exit phrase, Sunny marks that stage `needs-attention`, records the open findings as dashboard notifications, and continues wherever technically possible; it sets `phase: "blocked"` only when a hard dependency makes the next stage impossible.
+Each loop has a **max-iteration cap (default 5)** tracked in `state.json`. Each loop has its own counter: `frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `supabaseRemovalVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); `productionVerifyIterations`; and the six deploy counters (`deploymentPlatformVerifyIterations`, `serverProvisionVerifyIterations`, `deploymentDatabaseVerifyIterations`, `deploymentBackendVerifyIterations`, `deploymentEdgeVerifyIterations`, `deploymentVerifyIterations`). Stages run in order across **22** stages (frontend sanitization → architecture → Supabase removal → backend → database → nginx & SSL → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production → deploy platform Rajesh → server provision Suresh → deploy database Lakshmi → deploy backend Manoj → deploy edge Asha → deploy final audit Om); within a side the layers run in order (unit → integration → functional). When findings occur, Sunny invokes **Leela** (`issues-log-agent`) to append `.sunny/KNOWN_ISSUES.md`. If any loop hits the cap without its exit phrase, Sunny marks that stage `needs-attention`, records the open findings as dashboard notifications, and continues wherever technically possible; it sets `phase: "blocked"` only when a hard dependency makes the next stage impossible.
 
 ---
 

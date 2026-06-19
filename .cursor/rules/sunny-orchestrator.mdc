@@ -9,11 +9,25 @@ When the user invokes **Sunny** (e.g. "Sunny, build the backend for this fronten
 
 ## Non-negotiables
 
+### Build side
 - JHipster **microservices** only — never monolithic.
 - **PostgreSQL** for all persistent data.
 - **No mock data**, no fake CSV files, no dummy records.
 - Backend and frontend test coverage **>= 95%** line and branch.
 - Run verification loops until exact exit phrases are emitted.
+- Enterprise API standards: REST, versioning, OpenAPI, RFC 7807 errors, JWT/OAuth2, RBAC.
+- Production readiness: Docker, logging, monitoring, externalized config.
+
+### Deployment side
+- **Minikube production profile** (docker driver) on the VPS host — pods in `sunny-prod` namespace.
+- **kube-prometheus-stack** (Helm) in `observability` namespace — Prometheus scrapes `/management/prometheus`; Grafana NodePort 30300.
+- Every microservice pod: **liveness + readiness + startup probes**, distinct port, **CPU/memory requests + limits**, **ServiceMonitor** for Prometheus.
+- **Grafana + Sunny `progress.json` integration** — Infinity datasource on `https://<domain>/progress.json`, provisioned dashboards under `deploy/grafana/provisioning/`.
+- `deploy/port-map.md` is the **authoritative port matrix** — Rajesh seeds, Manoj completes per-service rows, Om verifies live state matches.
+- **Host Nginx** (Asha) with TLS via Certbot; routes `/api` to Minikube gateway NodePort; serves the dashboard; proxies `/grafana`.
+- **PM2** (Asha) hosts the rebuilt frontend on the host (port 3000 internal); Nginx fronts it at `https://<domain>/`.
+- **Host PostgreSQL** (Lakshmi) on the VPS; pods reach it via `host.min.internal:5432` (Minikube docker driver). `sync-secrets.sh` wires `SPRING_DATASOURCE_URL` as a K8s secret.
+- `deploy/scripts/health-check.sh` (Om) must be **green** before final approval — kubectl/minikube/pod readiness, gateway `/management/health`, public `/api`, Grafana `/api/health`, progress.json.
 
 ## Resumability (crash / reboot / new-session safe)
 
@@ -28,6 +42,37 @@ The pipeline is long-running, so it must **never lose its place**. All durable s
 - **Verify/audit agents** are already stateless (they assume no memory of prior runs), so they are inherently safe to re-run.
 - **Maya** writes `state.json` and `progress.json` via temp-file + atomic rename so a crash mid-write never corrupts state, and re-creates only missing scaffolding (never clobbers an existing `.env`, `RUN_ID`, or summary).
 
+## Phase −2 — Self-test (runs before resume check, every invocation)
+
+Before any pipeline logic, verify the environment can actually drive Sunny. A missing agent file or unwritable dashboard directory produces a cryptic Task-tool error mid-pipeline and the user has no way to tell what is wrong.
+
+```
+1. Required CLI tools on PATH:
+   for t in maya graphify jq openssl kubectl minikube helm docker; do
+     command -v "$t" >/dev/null || echo "MISSING: $t"
+   done
+2. `.sunny/` is writable:
+   mkdir -p .sunny/context .sunny/web .sunny/scripts
+   test -w .sunny
+3. Every stage's agent files exist (22 stages × 3 agents = up to 66 files):
+   for slug in supabase-removal jhipster-backend database nginx \
+               backend-unit-test backend-integration-test backend-functional-test \
+               frontend-unit-test frontend-integration-test frontend-functional-test \
+               system-integration-test swagger javadoc \
+               api-collection api-test api-performance production \
+               deployment-platform server-provision deployment-database \
+               deployment-backend deployment-edge om-fix; do
+     test -f ".cursor/agents/${slug}-agent.md" \
+       || echo "MISSING: .cursor/agents/${slug}-agent.md"
+   done
+4. The orchestration rule file is readable:
+   test -r .cursor/rules/sunny-orchestrator.mdc
+5. .env exists OR can be sourced from .env.example:
+   test -f .env || test -f .env.example
+```
+
+Failures in steps 1–5 block the run with a precise error ("`MISSING: kubectl` — install via Rajesh stage or run provision.sh"). Step 3 only fails the run if a **generate-agent** file is missing; missing fix-agents degrade gracefully (loop will report "no fix agent registered" and continue). Step 4 missing means the rule file was moved — refuse to run.
+
 ## Phase −1 — Resume check (runs before intake, every invocation)
 
 1. **No `.sunny/context/state.json`** → fresh run → go to **Phase 0 (Intake)**.
@@ -38,10 +83,22 @@ The pipeline is long-running, so it must **never lose its place**. All durable s
    3. **Restart the dashboard publisher if it's down** (early publisher in Phase 0, or confirm Nginx serves it post-Stage-5); Maya resumes fleet pushes. Re-print the dashboard URLs + `runId`.
    4. **Confirm the graph is current:** if `graphUpdatedAt` is stale or `graphify-out/` is missing, run `graphify update <project-root>` (or `graphify .` to bootstrap) before launching the next agent.
    5. **Find the resume point:** the current stage is the one marked `active` in `stages[]` (or the first non-`done` stage). Re-enter that stage's phase loop and **re-run its last in-flight agent** (idempotent, so safe) before continuing; **skip every stage already marked `done`.**
+      - **Stages marked `needs-attention` are NOT re-entered automatically** — they are a *soft-skip*. The original `needs-attention` notification stays in `.sunny/KNOWN_ISSUES.md` and on the dashboard; re-running the cap-hit stages on resume would burn the same 5 iterations and hit the same cap. Only re-enter a `needs-attention` stage if the user explicitly types a command like `sunny retry <stage>`.
    6. **Preserve iteration counters** from `state.json` so loop caps still apply across resumes (a run can't dodge its cap by restarting).
-   7. **Announce:** `Resuming {project}: stage {label} ({n}/16), iteration {i}.` Then continue the phase machine exactly as a normal run.
+   7. **`state.json.schemaVersion` check** — if the on-disk `state.json` carries a `schemaVersion` different from the current Sunny build's, refuse to resume and prompt the user to either run `sunny migrate` (Maya) or start a fresh run. Silent misread of stale state has caused wrong-stage re-entry in past versions.
+   8. **`.env` missing on resume** — if `.env` is gone but `state.json` is present, **prompt the user** rather than auto-regenerating. Auto-regen would change K8s secrets, the DB password, and the JWT key — silently invalidating the deployed cluster. Acceptable: user explicitly says "regenerate, I'm starting over."
+   9. **Announce:** `Resuming {project}: stage {label} ({n}/22), iteration {i}.` Then continue the phase machine exactly as a normal run.
 
 > Resume is **safe to repeat**: if a resumed run is interrupted again, the next invocation picks up from the new checkpoint. Caps and blockers carry forward, so resuming never causes infinite loops or lost "action required" asks.
+
+### Dashboard publisher health (periodic)
+
+If the early-publisher `nginx:alpine` container (intake → Stage 4) or the host-Nginx-served `agentprogress.html` (Stage 5+) is unreachable, the user has no live view. Periodically (e.g. after every `context-agent` capture):
+
+- `curl -fsS http://localhost:8787/agentprogress.html` (early publisher) or `https://$DOMAIN/agentprogress.html` (post-Stage-5)
+- on failure, restart the publisher (`docker restart sunny-publisher` or `systemctl reload nginx`) and re-print the URL
+
+This is a Maya responsibility, not an agent's. If the publisher is down for more than 2 consecutive checks, escalate as a `needs-attention` on the dashboard.
 
 ## Graphify (token-efficient context)
 
@@ -103,6 +160,21 @@ Maya generates the base `.env` at intake, but the set of secrets is **not frozen
 
 So the answer to "do they get blocked?": **no for internal secrets** (the agent just adds them). For external provider keys: surface as **`needs-input` / `actionRequired`** on the dashboards and **keep going** by default — hard-stop only when the stage literally cannot proceed without that key.
 
+### Secret-scrubbing (Maya)
+
+To prevent secret values from leaking via error traces, fix logs, or fleet-pushed context snapshots, Maya must **scrub** any string matching the patterns below to `***` before persisting agent output to `.sunny/context/*.md` or to the dashboard payload:
+
+- `*_KEY=*` (any line where the key suffix is `KEY` and there's a value)
+- `*_SECRET=*`
+- `*_PASSWORD=*` / `*_PASS=*` / `*_PWD=*`
+- `*_TOKEN=*`
+- `Authorization: *` (HTTP headers)
+- `Bearer *` (auth tokens)
+- JDBC connection strings containing `password=`
+- Anything matching `-----BEGIN .* PRIVATE KEY-----` … `-----END .* PRIVATE KEY-----`
+
+Key **names** are still recorded in `state.json.envKeys` (operators need to know which keys to set); only **values** are redacted. The scrubber runs in Maya, not in the agent — agents are told to "never echo", Maya enforces it as a safety net.
+
 ## Agent registry
 
 | Agent | subagent_type / file | readonly |
@@ -117,7 +189,7 @@ So the answer to "do they get blocked?": **no for internal secrets** (the agent 
 | Architecture Fix Agent | `architecture-fix-agent` | false |
 | JHipster Backend Agent | `jhipster-backend-agent` | false |
 | JHipster Verify Agent | `jhipster-verify-agent` | true |
-| Issue Resolution Agent | `issue-resolution-agent` | false |
+| Issue Resolution Agent (Vikram Fix; also handles backend generate-fail recovery in Phase 1.5) | `issue-resolution-agent` | false |
 | Database Agent | `database-agent` | false |
 | Database Verify Agent | `database-verify-agent` | true |
 | Database Fix Agent | `database-fix-agent` | false |
@@ -162,6 +234,26 @@ So the answer to "do they get blocked?": **no for internal secrets** (the agent 
 | API Performance Test Fix Agent | `api-performance-test-fix-agent` | false |
 | Production Standards Agent | `production-standards-agent` | true |
 | Production Fix Agent | `production-fix-agent` | false |
+| Supabase & Lovable Removal Agent | `supabase-removal-agent` | false |
+| Supabase Removal Verify Agent | `supabase-removal-verify-agent` | true |
+| Supabase Removal Fix Agent | `supabase-removal-fix-agent` | false |
+| Deployment Platform Agent | `deployment-platform-agent` | false |
+| Deployment Platform Verify Agent | `deployment-platform-verify-agent` | true |
+| Deployment Platform Fix Agent | `deployment-platform-fix-agent` | false |
+| Server Provisioning Agent | `server-provision-agent` | false |
+| Server Provisioning Verify Agent | `server-provision-verify-agent` | true |
+| Server Provisioning Fix Agent | `server-provision-fix-agent` | false |
+| Deployment Database Agent | `deployment-database-agent` | false |
+| Deployment Database Verify Agent | `deployment-database-verify-agent` | true |
+| Deployment Database Fix Agent | `deployment-database-fix-agent` | false |
+| Deployment Backend Agent | `deployment-backend-agent` | false |
+| Deployment Backend Verify Agent | `deployment-backend-verify-agent` | true |
+| Deployment Backend Fix Agent | `deployment-backend-fix-agent` | false |
+| Deployment Edge Agent | `deployment-edge-agent` | false |
+| Deployment Edge Verify Agent | `deployment-edge-verify-agent` | true |
+| Deployment Edge Fix Agent | `deployment-edge-fix-agent` | false |
+| Deployment Verify Agent | `deployment-verify-agent` | true |
+| Om Fix (deployment final-fix) | `om-fix-agent` | false |
 | Fleet Host Agent (standalone) | `fleet-host-agent` | false |
 
 ## Agent codenames
@@ -188,9 +280,16 @@ Each agent has a human codename (a family base name + `Verify`/`Fix`). Refer to 
 | Tara (API tests) | Tara — `api-test-agent` | Tara Verify — `api-test-verify-agent` | Tara Fix — `api-test-fix-agent` |
 | Pawan (API performance) | Pawan — `api-performance-test-agent` | Pawan Verify — `api-performance-test-verify-agent` | Pawan Fix — `api-performance-test-fix-agent` |
 | Prakash (production) | — | Prakash — `production-standards-agent` | Prakash Fix — `production-fix-agent` |
+| Kiran (supabase removal) | Kiran — `supabase-removal-agent` | Kiran Verify — `supabase-removal-verify-agent` | Kiran Fix — `supabase-removal-fix-agent` |
+| Rajesh (deploy platform) | Rajesh — `deployment-platform-agent` | Rajesh Verify — `deployment-platform-verify-agent` | Rajesh Fix — `deployment-platform-fix-agent` |
+| Suresh (server provision) | Suresh — `server-provision-agent` | Suresh Verify — `server-provision-verify-agent` | Suresh Fix — `server-provision-fix-agent` |
+| Lakshmi (deploy database) | Lakshmi — `deployment-database-agent` | Lakshmi Verify — `deployment-database-verify-agent` | Lakshmi Fix — `deployment-database-fix-agent` |
+| Manoj (deploy backend) | Manoj — `deployment-backend-agent` | Manoj Verify — `deployment-backend-verify-agent` | Manoj Fix — `deployment-backend-fix-agent` |
+| Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
+| Om (deploy final verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 | Hari (fleet host, standalone) | Hari — `fleet-host-agent` | — | — |
 
-**Singletons:** Sunny — `sunny` (orchestrator) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only orchestrator — full pipeline #1–#22) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 **Fleet host (Hari):** the global/fleet dashboard is a separate, run-once deployment. On the host that owns the **fleet domain**, invoke **Hari** to stand up the central collector (`.cursor/central/`) with TLS, so all worker VPSs can push to one board at `https://<fleet-domain>/`. Hari is **not** part of the per-project pipeline and does not use the Context Agent. Worker runs only need to be given the fleet domain at kickoff; Maya fetches the push token from `/api/fleet-config` automatically (and retries if Hari has not deployed yet).
 
@@ -204,12 +303,16 @@ Frontend Input → Sunny
        resume from the active/first-not-done stage (skip done stages, keep counters)
      else ↓ fresh run
   → context-agent (intake)
-  → Frontend sanitization (Lovable/Supabase removal):
-      frontend-sanitize-agent → context-agent → frontend-sanitize-verify-agent
-      → [loop if not complete] frontend-sanitize-fix-agent → context-agent → frontend-sanitize-verify-agent
   → Architecture:
       architecture-agent → context-agent → architecture-verify-agent
       → [loop if not approved] architecture-fix-agent → context-agent → architecture-verify-agent
+  → Frontend sanitization (Lovable cleanup — runs both before and after architecture):
+      # Phase 0.25 — Isha strips Supabase/Lovable from Lovable exports, leaves compile-safe stubs.
+      # Phase 0.65 — Kiran (supabase-removal-agent) wires real REST clients matching the
+      # approved API contract, migrates auth to JWT, deletes supabase/ + .lovable/ folders.
+  → Supabase & Lovable removal (before backend generation):
+      supabase-removal-agent → context-agent → supabase-removal-verify-agent
+      → [loop if not complete] supabase-removal-fix-agent → context-agent → supabase-removal-verify-agent
   → jhipster-backend-agent
   → context-agent
   → jhipster-verify-agent
@@ -256,8 +359,76 @@ Frontend Input → Sunny
       → [loop if not satisfied] api-performance-test-fix-agent → context-agent → api-performance-test-verify-agent
   → Production:
       production-standards-agent → context-agent
+```
+
+> **Leela always runs between verify and fix** — every `*-verify-agent` whose report has ≥ 1 finding triggers `issues-log-agent` (`Leela`) **after** `context-agent` capture and **before** the matching `*-fix-agent`. Leela appends to `.sunny/KNOWN_ISSUES.md` (prevention ledger). Skip Leela on clean exits. See "Issues logging (Leela)" below.
       → [loop if blocked] production-fix-agent → context-agent → production-standards-agent
-  → Final Approval
+  → Production deployment (VPS / Minikube — only after production approval):
+      deployment-platform-agent → context-agent
+      → [loop] deployment-platform-verify-agent → deployment-platform-fix-agent
+      → server-provision-agent → context-agent
+      → [loop] server-provision-verify-agent → server-provision-fix-agent
+      → deployment-database-agent → context-agent
+      → [loop] deployment-database-verify-agent → deployment-database-fix-agent
+      → deployment-backend-agent → context-agent
+      → [loop] deployment-backend-verify-agent → deployment-backend-fix-agent
+      → deployment-edge-agent → context-agent
+      → [loop] deployment-edge-verify-agent → deployment-edge-fix-agent
+      → [loop] deployment-verify-agent → om-fix-agent
+  → Final Approval (app live on domain)
+```
+
+## Phase 0 — Intake
+
+1. Analyze the frontend: API calls, models, auth, routes, requirements.
+2. **Capture the only user inputs at kickoff** (do not ask for secrets, tokens, or `.env` values):
+   - **Project domain** — single host: `https://<domain>/` → frontend, `https://<domain>/api` → gateway.
+   - **Fleet domain** — global dashboard host (e.g. `fleet.example.com` → `https://fleet.example.com/`).
+   - *(optional)* **Certbot email** — if omitted, agents use `admin@<project-domain>`.
+   Pass `project.name`, `domain`, `fleetDomain`, and `acmeEmail` (if given) to context-agent. Maya derives everything else: `.env` secrets, `RUN_ID`, `CENTRAL_DASHBOARD_URL`, `CENTRAL_PUSH_TOKEN` (fetched from `GET https://<fleet-domain>/api/fleet-config`), local dashboard URL, early publisher, and fleet pushes.
+3. **Before launching the first agent, point the user at `bin/start-sunny.sh`** if they have not already run it. That script does the kickoff work for them:
+   - creates `.env` from `.env.example` (never clobbers an existing one)
+   - prompts for `DOMAIN` / `ACME_EMAIL` / `FLEET_DOMAIN` / `FRONTEND_PATH`
+   - generates `RUN_ID` deterministically (so the dashboard has it from minute 0)
+   - optionally `git clone`s the frontend into `./frontend/` if `FRONTEND_REPO_URL` is set (Pattern B in INSTALL.md)
+   - runs the Phase −2 self-test (CLI tools, agent file inventory, `.env` keys)
+   - prints the exact kickoff prompt: *"start sunny with domain `<DOMAIN>` and fleet `<FLEET_DOMAIN>`"*
+   In CI or non-interactive mode the user can pass `--non-interactive --domain=... --fleet=...`.
+   **Sunny must not start the pipeline if `bin/start-sunny.sh` has not been run successfully** — the rule's Phase −2 self-test requires `DOMAIN`, `ACME_EMAIL`, and `FRONTEND_PATH` to exist in `.env`, and `start-sunny.sh` is what creates them.
+4. Launch **context-agent** with `sourceAgent: intake`, frontend path, requirements, derived domain model, and the deployment inputs. Maya writes `project-context.md` (Deployment & domain section), initializes `state.json` (with `project`, `workflowStartedAt`, seeded `stages[]`), seeds the dashboard bundle in `.sunny/web/`, and **auto-generates the root `.env` with strong secrets** (PostgreSQL password, JWT base64 secret, registry password) plus `DOMAIN`/`ACME_EMAIL` from intake — no human writes secrets. Maya is idempotent: an existing `.env` is never clobbered; only missing keys/secrets are added. Secret values are never echoed to chat, context, or the dashboard.
+5. Confirm `.sunny/context/project-context.md`, `state.json`, `.sunny/web/progress.json`, and the root `.env` (gitignored, secrets generated) exist before proceeding.
+6. **Before launching the deploy phase (#17), point the user at `bin/smoke-test-deploy.sh`** — the Phase 5.0 pre-flight check. They should run:
+   ```bash
+   ./bin/smoke-test-deploy.sh --vps=<IP> --user=<USER> --domain=<DOMAIN>
+   ```
+   The script verifies SSH key-based auth, DNS propagation (A record → VPS_IP), inbound ports 22/80/443, and sudo NOPASSWD. If it exits non-zero, Rajesh (#17) **must not launch** — emit a Maya `blockers` row with the precise failure and `howTo` (e.g. *"Add A record for app.example.com → 1.2.3.4, wait 5 min for TTL, then re-run `sunny deploy`"*).
+7. **Start the early progress publisher** so the run is web-visible from agent #1:
+   ```bash
+   docker compose -f .sunny/web/docker-compose.yml up -d   # or: PROGRESS_PORT=9090 docker compose -f .sunny/web/docker-compose.yml up -d
+   # no-Docker fallback: python -m http.server 8787 --directory .sunny/web
+   ```
+   Tell the user **all dashboard URLs** for this run:
+   - **Local (this VPS):** `http://<server-ip>:8787/agentprogress.html` (open port 8787; plain HTTP until Naveen issues the cert). Auto-refreshes every 5 min.
+   - **Local (after Nginx):** `https://<domain>/agentprogress.html`
+   - **Fleet (all VPSs):** if `CENTRAL_DASHBOARD_URL` is set, print `https://<central-domain>/` and this run's **`runId`** (from `state.json`) so the user can find this card on the global board.
+
+## Phase 0.25 — Frontend sanitization loop (Isha)
+
+Runs **after intake** and **before architecture**. Strips all Supabase and Lovable artifacts from Lovable-exported frontends (deps, integrations, branding, env vars, logos, meta tags). Leaves compile-safe stubs only — full JHipster JWT/API wiring is architecture/backend work (Kiran's job, in Phase 0.65).
+
+**Exit phrase (must match exactly):** `Frontend sanitization complete.`
+
+```
+1. Launch frontend-sanitize-agent with handoff (project-context.md, frontend path)
+2. Launch context-agent to persist frontend-sanitize-summary.md
+repeat:
+  3. Launch frontend-sanitize-verify-agent (readonly) with context handoff
+  4. Launch context-agent to persist frontend-sanitize-verify-report.md
+  5. Read state.json — if lastVerdict == exit phrase → break to Phase 0.5
+  6. If frontendSanitizeVerifyIterations >= maxIterations (5) → cap reached: mark stage needs-attention, surface notifications (local + fleet), continue to Phase 0.5 (the stubs are enough to proceed; Kiran will fix any leftovers in Phase 0.65)
+  7. Launch frontend-sanitize-fix-agent with the verify findings
+  8. Launch context-agent to append frontend-sanitize-fix-log.md
+  9. goto repeat
 ```
 
 ## Issues logging (Leela)
@@ -270,54 +441,14 @@ Whenever a stage reports **actionable problems** (verify findings, blockers, `ne
 
 Do **not** invoke Leela on clean verify exits with zero findings.
 
-## Phase 0 — Intake
-
-1. Analyze the frontend: API calls, models, auth, routes, requirements.
-2. **Capture the only user inputs at kickoff** (do not ask for secrets, tokens, or `.env` values):
-   - **Project domain** — single host: `https://<domain>/` → frontend, `https://<domain>/api` → gateway.
-   - **Fleet domain** — global dashboard host (e.g. `fleet.example.com` → `https://fleet.example.com/`).
-   - *(optional)* **Certbot email** — if omitted, agents use `admin@<project-domain>`.
-   Pass `project.name`, `domain`, `fleetDomain`, and `acmeEmail` (if given) to context-agent. Maya derives everything else: `.env` secrets, `RUN_ID`, `CENTRAL_DASHBOARD_URL`, `CENTRAL_PUSH_TOKEN` (fetched from `GET https://<fleet-domain>/api/fleet-config`), local dashboard URL, early publisher, and fleet pushes.
-3. Launch **context-agent** with `sourceAgent: intake`, frontend path, requirements, derived domain model, and the deployment inputs. Maya writes `project-context.md` (Deployment & domain section), initializes `state.json` (with `project`, `workflowStartedAt`, seeded `stages[]`), seeds the dashboard bundle in `.sunny/web/`, and **auto-generates the root `.env` with strong secrets** (PostgreSQL password, JWT base64 secret, registry password) plus `DOMAIN`/`ACME_EMAIL` from intake — no human writes secrets. Maya is idempotent: an existing `.env` is never clobbered; only missing keys/secrets are added. Secret values are never echoed to chat, context, or the dashboard.
-4. Confirm `.sunny/context/project-context.md`, `state.json`, `.sunny/web/progress.json`, `.sunny/KNOWN_ISSUES.md`, `.sunny/push-fleet.py`, and the root `.env` (gitignored, secrets generated) exist before proceeding.
-5. **Fleet health check (non-blocking):** if `fleetDomain` is set, `GET https://<fleetDomain>/api/fleet-config` should respond. If it times out or returns 5xx, warn the user to deploy Hari (`fleet-host-agent`) on the fleet host before expecting fleet dashboard updates — the run continues with local dashboard only.
-6. **Start the early progress publisher** so the run is web-visible from agent #1:
-   ```bash
-   docker compose -f .sunny/web/docker-compose.yml up -d   # or: PROGRESS_PORT=9090 docker compose -f .sunny/web/docker-compose.yml up -d
-   # no-Docker fallback: python -m http.server 8787 --directory .sunny/web
-   ```
-   Tell the user **all dashboard URLs** for this run:
-   - **Local (this VPS):** `http://<server-ip>:8787/agentprogress.html` (open port 8787; plain HTTP until Naveen issues the cert). Auto-refreshes every 5 min.
-   - **Local (after Nginx):** `https://<domain>/agentprogress.html`
-   - **Fleet (all VPSs):** if `CENTRAL_DASHBOARD_URL` is set, print `https://<central-domain>/` and this run's **`runId`** (from `state.json`) so the user can find this card on the global board.
-
-## Phase 0.25 — Frontend sanitization loop
-
-Runs **after intake** and **before architecture**. Strips all Supabase and Lovable artifacts from Lovable-exported frontends (deps, integrations, branding, env vars). Leaves compile-safe stubs only — full JHipster JWT/API wiring is architecture/backend work.
-
-**Exit phrase (must match exactly):** `Frontend sanitization complete.`
-
-```
-1. Launch frontend-sanitize-agent with handoff (project-context.md, frontend path)
-2. Launch context-agent to persist frontend-sanitize-summary.md
-repeat:
-  3. Launch frontend-sanitize-verify-agent (readonly) with context handoff
-  4. Launch context-agent to persist frontend-sanitize-verify-report.md
-  5. Read state.json — if lastVerdict == exit phrase → break to Phase 0.5
-  6. If frontendSanitizeVerifyIterations >= maxIterations (5) → cap reached: mark stage needs-attention, surface notifications (local + fleet), continue to next stage (set blocked + stop only if a hard dependency makes continuing impossible)
-  7. Launch frontend-sanitize-fix-agent with the verify findings
-  8. Launch context-agent to append frontend-sanitize-fix-log.md
-  9. goto repeat
-```
-
 ## Phase 0.5 — Architecture loop
 
-Designs the architecture blueprint + boilerplate before any JHipster generation. **Prerequisite:** frontend sanitization exit phrase recorded.
+Designs the architecture blueprint + boilerplate before any JHipster generation.
 
 **Exit phrase (must match exactly):** `Architecture approved.`
 
 ```
-1. Launch architecture-agent with handoff (project-context.md, frontend-sanitize-summary.md)
+1. Launch architecture-agent with handoff (project-context.md)
 2. Launch context-agent to persist architecture-summary.md
 repeat:
   3. Launch architecture-verify-agent (readonly) with context handoff
@@ -329,10 +460,33 @@ repeat:
   9. goto repeat
 ```
 
+## Phase 0.65 — Supabase & Lovable removal loop
+
+Runs **after** architecture is approved and **before** JHipster backend generation. Removes all Supabase and `.lovable` usage from the frontend, replaces with REST API clients aligned to the architecture, and **deletes** the entire `supabase/` and `.lovable/` folders.
+
+**Exit phrase (must match exactly):** `Supabase removal complete.`
+
+```
+1. Launch supabase-removal-agent with handoff (architecture-summary.md, project-context.md)
+2. Launch context-agent to persist supabase-removal-summary.md
+repeat:
+  3. Launch supabase-removal-verify-agent (readonly) with context handoff
+  4. Launch context-agent to persist supabase-removal-verify-report.md
+  5. Read state.json — if lastVerdict == exit phrase → break to Phase 1
+  6. If supabaseRemovalVerifyIterations >= maxIterations (5) → cap reached: mark stage needs-attention, surface notifications, continue to Phase 1 only if backend generation can proceed without removal (hard-block if Supabase folders/calls remain)
+  7. Launch supabase-removal-fix-agent with the verify findings — handoff MUST include any **unresolved findings from Isha (Phase 0.25)** that mention Supabase/Lovable stubs, since those become Kiran's responsibility after the loop cap
+  8. Launch context-agent to append supabase-removal-fix-log.md
+  9. goto repeat
+```
+
 ## Phase 1 — Backend generation
 
 1. Launch **jhipster-backend-agent** with handoff from context-agent (include `project-context.md` and the approved `architecture-summary.md` blueprint + draft JDL).
 2. Launch **context-agent** to persist `backend-summary.md`.
+
+## Phase 1.5 — Backend generate-fail recovery
+
+If `jhipster-backend-agent` (Phase 1) errors out partway — no generated code, broken Maven/Gradle build, JDL import failure — there is no separate `jhipster-backend-fix-agent` in the registry. **Use `issue-resolution-agent`** (Vikram Fix) for recovery, exactly the same way it is used in the Phase 2 verify loop. Loop is capped at 3 iterations (not 5) since generate-fail is usually a single root cause; if still failing after 3, hard-block the run with a `blocker` so the user can intervene. Do **not** invent a missing agent slug — Task tool will return a cryptic error and the pipeline will hang.
 
 ## Phase 2 — Backend verification loop
 
@@ -524,7 +678,151 @@ repeat:
   7. goto repeat
 ```
 
-After the exit phrase, present the final summary to the user: architecture, coverage, security, production readiness, run guide.
+After the exit phrase, proceed to **Phase 5 — Production deployment** (do not mark `complete` until deployment is verified).
+
+## Phase 5 — Production deployment (VPS / Minikube)
+
+Runs **only after** `Final approval granted. System is production-ready.` (dashboard **#16**). Stages **#17–#22** deploy to the VPS with the **same generate → verify (readonly) → fix loop** as architecture, database, and nginx: one generate agent, then a readonly verify agent with an exact exit phrase, then a fix agent on failure (cap 5 per loop). Dashboard **#22** is verify/fix only (Om) — no separate generate agent. Do not mark `phase: complete` until Om emits `Production deployment verified. System is live.`
+
+**Production non-negotiables:** Minikube production profile; kube-prometheus-stack; probes + limits on every pod; Grafana + Sunny `progress.json` integration; `deploy/port-map.md`; host Nginx TLS + PM2; `deploy/scripts/health-check.sh` green before Om final approval.
+
+### 5.0 Pre-flight — VPS reachability (mandatory before #17)
+
+Before launching Rajesh (#17), Sunny MUST verify the deploy target is actually reachable. Catching this here prevents burning 5 Rajesh iterations on a broken network.
+
+Required checks (run on the operator's machine, not on a remote hop):
+
+```bash
+# 1. .env has deploy coordinates
+[[ -f .env ]] && grep -qE '^(VPS_IP|VPS_USER|DOMAIN|DOMAIN_BASE)=' .env || \
+  echo "ERROR: .env missing VPS_IP/VPS_USER/DOMAIN" >&2
+
+# 2. SSH works (use key-based auth; never password)
+ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+    "${VPS_USER:-root}@${VPS_IP}" 'true' 2>/dev/null
+
+# 3. Domain resolves to VPS_IP (DNS propagated)
+dig +short "$DOMAIN" | grep -q "$VPS_IP"
+
+# 4. Required inbound ports open
+nc -z -w5 "$VPS_IP" 22   # SSH
+nc -z -w5 "$VPS_IP" 80   # HTTP  (Let's Encrypt HTTP-01)
+nc -z -w5 "$VPS_IP" 443  # HTTPS
+```
+
+If any check fails: emit a Maya `blockers` row with `howTo` (e.g. "Add A record for $DOMAIN → $VPS_IP and wait 5 min for propagation; rerun `sunny deploy`"), set `phase: "blocked"`, and **do not launch Rajesh**. Do not mark the pre-flight as `done` until all four pass.
+
+| Dashboard # | Sub-phase | Codename | Exit phrase |
+|-------------|-----------|----------|-------------|
+| #16 | Production gate | Prakash | `Final approval granted. System is production-ready.` |
+| #17 | Platform | Rajesh | `Deployment platform approved.` |
+| #18 | Provision | Suresh | `Server provisioning approved.` |
+| #19 | Database | Lakshmi | `Deployment database approved.` |
+| #20 | Backend | Manoj | `Deployment backend approved.` |
+| #21 | Edge | Asha | `Deployment edge approved.` |
+| #22 | Final verify | Om | `Production deployment verified. System is live.` |
+
+### 5.1 Deployment platform loop — dashboard #17 (Rajesh)
+
+**Exit phrase:** `Deployment platform approved.`
+
+```
+1. Launch deployment-platform-agent
+2. Launch context-agent → deployment-platform-summary.md
+repeat:
+  3. Launch deployment-platform-verify-agent (readonly)
+  4. Launch context-agent → deployment-platform-verify-report.md
+  5. if lastVerdict == exit phrase → break to 5.2
+  6. if deploymentPlatformVerifyIterations >= 5 → needs-attention; continue if possible
+  7. Launch deployment-platform-fix-agent
+  8. Launch context-agent → deployment-platform-fix-log.md
+  9. goto repeat
+```
+
+### 5.2 Server provisioning loop — dashboard #18 (Suresh)
+
+**Exit phrase:** `Server provisioning approved.`
+
+```
+1. Launch server-provision-agent
+2. Launch context-agent → server-provision-summary.md
+repeat:
+  3. Launch server-provision-verify-agent (readonly)
+  4. Launch context-agent → server-provision-verify-report.md
+  5. if lastVerdict == exit phrase → break to 5.3
+  6. if serverProvisionVerifyIterations >= 5 → needs-attention; continue if possible
+  7. Launch server-provision-fix-agent
+  8. Launch context-agent → server-provision-fix-log.md
+  9. goto repeat
+```
+
+### 5.3 Deployment database loop — dashboard #19 (Lakshmi)
+
+**Exit phrase:** `Deployment database approved.`
+
+```
+1. Launch deployment-database-agent
+2. Launch context-agent → deployment-database-summary.md
+repeat:
+  3. Launch deployment-database-verify-agent (readonly)
+  4. Launch context-agent → deployment-database-verify-report.md
+  5. if lastVerdict == exit phrase → break to 5.4
+  6. if deploymentDatabaseVerifyIterations >= 5 → needs-attention; continue if possible
+  7. Launch deployment-database-fix-agent
+  8. Launch context-agent → deployment-database-fix-log.md
+  9. goto repeat
+```
+
+### 5.4 Deployment backend loop — dashboard #20 (Manoj)
+
+**Exit phrase:** `Deployment backend approved.`
+
+```
+1. Launch deployment-backend-agent
+2. Launch context-agent → deployment-backend-summary.md
+repeat:
+  3. Launch deployment-backend-verify-agent (readonly)
+  4. Launch context-agent → deployment-backend-verify-report.md
+  5. if lastVerdict == exit phrase → break to 5.5
+  6. if deploymentBackendVerifyIterations >= 5 → needs-attention; continue if possible
+  7. Launch deployment-backend-fix-agent
+  8. Launch context-agent → deployment-backend-fix-log.md
+  9. goto repeat
+```
+
+### 5.5 Deployment edge loop — dashboard #21 (Asha)
+
+**Exit phrase:** `Deployment edge approved.`
+
+```
+1. Launch deployment-edge-agent
+2. Launch context-agent → deployment-edge-summary.md
+repeat:
+  3. Launch deployment-edge-verify-agent (readonly)
+  4. Launch context-agent → deployment-edge-verify-report.md
+  5. if lastVerdict == exit phrase → break to 5.6
+  6. if deploymentEdgeVerifyIterations >= 5 → needs-attention; continue if possible
+  7. Launch deployment-edge-fix-agent
+  8. Launch context-agent → deployment-edge-fix-log.md
+  9. goto repeat
+```
+
+### 5.6 Final deployment verification loop — dashboard #22 (Om)
+
+**Exit phrase:** `Production deployment verified. System is live.`
+
+```
+repeat:
+  1. Launch deployment-verify-agent (readonly) with FULL deployment context
+  2. Launch context-agent → deployment-verify-report.md
+  3. if lastVerdict == exit phrase → break to Final Approval (phase complete)
+  4. if deploymentVerifyIterations >= 5 → needs-attention; complete with outstanding items listed
+  5. Launch om-fix-agent
+  6. Launch context-agent → deployment-fix-log.md
+  7. goto repeat
+```
+
+After final exit phrase: live URLs, Grafana dashboard, `.env` credential location, port map, run guide.
 
 ## Loop safety & edge cases (no infinite loops)
 

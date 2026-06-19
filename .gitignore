@@ -131,6 +131,15 @@ desktop.ini
 *.iml
 *.iws
 
+# ----- Colleague's reference repo (kept on disk only, never committed) ------
+# We absorbed everything we needed from this clone into our hardened
+# .cursor/agents/ and deploy/ files. Keeping reference/ on disk for future
+# diff-comparison but it must NEVER be committed — it would bloat the repo
+# with someone else's full agent set and .git/ history.
+reference/
+reference/**
+!reference/.gitkeep
+
 # NOTE: .cursor/ is intentionally TRACKED (it is the agent system).
 # NOTE: .vscode/ — uncomment the next line if you do not want to share editor settings.
 # .vscode/

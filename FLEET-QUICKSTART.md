@@ -15,10 +15,12 @@ secrets, tokens, and `RUN_ID`s.
 
 | Situation | What you do |
 |-----------|-------------|
-| **First VPS** (also the fleet host) | Set DNS for both domains → ask Sunny to **set up the fleet dashboard host** (Hari) → then ask Sunny to **build the backend**. |
-| **Later VPS** (fleet already up) | Set DNS for the project domain → ask Sunny to **build the backend**, giving the **same fleet domain**. Do **not** redeploy the fleet host. |
+| **First VPS** (also the fleet host) | Set DNS for both domains → ask Sunny to **set up the fleet dashboard host** (Hari) → then ask Sunny to **build and deploy the backend**. |
+| **Later VPS** (fleet already up) | Set DNS for the project domain → ask Sunny to **build and deploy the backend**, giving the **same fleet domain**. Do **not** redeploy the fleet host. |
 
 You never copy or type the push token anywhere. Agents fetch it from `https://<fleet-domain>/api/fleet-config`.
+
+"Build and deploy" is a single Sunny invocation — after the production audit, Sunny automatically runs the **Rajesh → Suresh → Lakshmi → Manoj → Asha → Om** deploy tail (stages #17–#22) and brings the system live on the project domain. See [`deploy/README.md`](deploy/README.md) for the operator runbook.
 
 ---
 
