@@ -140,6 +140,13 @@ reference/
 reference/**
 !reference/.gitkeep
 
+# ----- Claude Code session data (per-developer) -----------------------------
+# Created automatically by the Claude Code CLI. Each developer's settings
+# differ and none of it should be committed.
+.claude/
+.claude/**
+!.claude/.gitkeep
+
 # NOTE: .cursor/ is intentionally TRACKED (it is the agent system).
 # NOTE: .vscode/ — uncomment the next line if you do not want to share editor settings.
 # .vscode/
