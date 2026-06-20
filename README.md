@@ -411,9 +411,12 @@ kubectl apply -k deploy/minikube/
 
 ## Learn more
 
+- **[HERMES-JARVIS-SETUP.md](HERMES-JARVIS-SETUP.md)** — full VPS guide: install Hermes + Jarvis from scratch, wire Sunny, systemd, nginx, secrets, backup, troubleshooting.
+- **[HERMES-SUNNY-GUIDE.md](HERMES-SUNNY-GUIDE.md)** — how Sunny runs on Hermes (bridge, LLM prerequisites, invoke patterns).
+- **[HERMES-MAPPING.md](HERMES-MAPPING.md)** — Cursor ↔ Hermes technical mapping.
 - **[INSTALL.md](INSTALL.md)** — what to install (React, Java/JHipster, Docker, Minikube, Helm, Grafana, Graphify, …), VPS setup, `.gitignore`, GitHub clone/push workflow, edge cases.
 - **[FLEET-QUICKSTART.md](FLEET-QUICKSTART.md)** — multi-VPS fleet dashboard deployment (Hari runs the central collector on the fleet host).
-- **[deploy/README.md](deploy/README.md)** — production deployment operator guide (Rajesh/Suresh/Lakshmi/Manoj/Asha/Om).
+- **[deploy/README.md](deploy/README.md)** — production deployment operator guide (Rajesh/Suresh/Lakshmi/Manoj/Asha/Om) + copy-paste templates (`hermes.env.example`, systemd units, nginx, Sunny bridge skill).
 - [`.gitignore`](.gitignore) — never commit `.env`, `.sunny/`, `node_modules/`, `target/`, certs, `graphify-out/`, `deploy/.secrets/`.
 - [`.env.example`](.env.example) — reference template; the real `.env` is auto-generated with secrets by Maya at intake (copy only to override).
 - [`.cursor/agents/AGENT-GUIDE.md`](.cursor/agents/AGENT-GUIDE.md) — what every single agent does, clearly explained.
