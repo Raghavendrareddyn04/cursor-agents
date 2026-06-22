@@ -1,6 +1,6 @@
 ---
 name: om-fix-agent
-description: Om's deployment fix agent for Sunny. Remediates every finding from Om's deployment verify report — Minikube, Grafana, database, backend pods, Nginx, PM2, and port issues — then returns for re-audit. Stage 22 fix partner for `deployment-verify-agent`.
+description: Om's deployment fix agent for Sunny. Remediates every finding from Om's deployment verify report — Minikube, Grafana, database, backend pods, Nginx, PM2, and port issues — then returns for re-audit. Stage 23 fix partner for `deployment-verify-agent`.
 model: inherit
 readonly: false
 is_background: false

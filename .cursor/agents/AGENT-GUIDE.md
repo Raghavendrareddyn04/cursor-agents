@@ -23,7 +23,7 @@ Frontend sanitization (Isha) → Architecture (Arjun) → Supabase removal (Kira
 → Backend (JHipster, Vikram) → Database (Dhruv) → Nginx & SSL (Naveen)
 → Backend tests → Frontend tests → System integration tests
 → Swagger → Javadoc → API collection → API tests → API performance
-→ Production audit (Prakash, #16)
+→ Production audit (Prakash, #17)
 → Deploy platform (Rajesh) → Provision (Suresh) → Deploy DB (Lakshmi)
 → Deploy backend (Manoj) → Deploy edge (Asha) → Final deploy verify (Om)
 → Live (https://<project-domain>/)
@@ -454,7 +454,7 @@ Runs **only after** `Final approval granted. System is production-ready.` Six su
 | Prakash | `production-standards-agent` | Yes | `Final approval granted. System is production-ready.` |
 | Prakash Fix | `production-fix-agent` | No | — |
 | Kiran | `supabase-removal-agent` | No | — |
-| Kiran Verify | `supabase-removal-verify-agent` | Yes | `Supabase and Lovable removal complete.` |
+| Kiran Verify | `supabase-removal-verify-agent` | Yes | `Supabase removal complete.` |
 | Kiran Fix | `supabase-removal-fix-agent` | No | — |
 | Rajesh | `deployment-platform-agent` | No | — |
 | Rajesh Verify | `deployment-platform-verify-agent` | Yes | `Deployment platform approved.` |

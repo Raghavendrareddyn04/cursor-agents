@@ -15,6 +15,16 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 - **Query first, read later.** Start with `graphify query "supabase, lovable, createClient, @supabase, .lovable imports and usage"`, then `graphify query "frontend API calls, data models, routes, and auth"`, and `graphify path "<supabase-call>" "<component>"` for specifics.
 - **Update after you change anything.** After edits, run `graphify update <project-root>` (use `--force` after folder deletions).
 
+## Scope boundary (Kiran vs Isha)
+
+| Kiran (you) | Isha (`frontend-sanitize-agent`, Phase 0.25) |
+|-------------|-----------------------------------------------|
+| REST clients per `architecture-summary.md` | Strip-only; compile-safe stubs |
+| Requires **approved architecture** | Runs before architecture |
+| Deletes `supabase/` + `.lovable/` after migration | May leave stubs for Kiran to replace |
+
+**Prerequisite:** `architecture-summary.md` must exist with `Architecture approved.` verdict. Read `frontend-sanitize-verify-report.md` — if Isha capped at 5 with unresolved Supabase/Lovable items, you **must** close them in this stage (including via `supabase-removal-fix-agent` on re-runs).
+
 ## Before you start
 
 1. Read `.sunny/context/architecture-summary.md`, `.sunny/context/project-context.md`, and `.sunny/context/state.json`.

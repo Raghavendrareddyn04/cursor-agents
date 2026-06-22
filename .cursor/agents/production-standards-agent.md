@@ -22,6 +22,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 1. Read **every** `.sunny/context/` file — not just summaries — so you can confirm each prior stage is genuinely complete:
    - `project-context.md`, `frontend-sanitize-summary.md`, `frontend-sanitize-verify-report.md`
    - `architecture-summary.md`, `architecture-verify-report.md`
+   - `supabase-removal-summary.md`, `supabase-removal-verify-report.md`
    - `backend-summary.md`, `verify-report.md`
    - `database-summary.md`, `database-verify-report.md`
    - `nginx-summary.md`, `nginx-verify-report.md`
@@ -38,8 +39,9 @@ Before your own categories, confirm **each previous agent did what it was suppos
 
 | Stage | Required verdict | Artifact spot-check |
 | --- | --- | --- |
-| Frontend sanitization | `Frontend sanitization complete.` | no Supabase/Lovable in `src/`; build passes |
+| Frontend sanitization (Isha) | `Frontend sanitization complete.` | no Supabase/Lovable in `src/`; build passes |
 | Architecture | `Architecture approved.` | blueprint + JDL exist |
+| Supabase removal (Kiran) | `Supabase removal complete.` | REST clients per architecture; `supabase/` and `.lovable/` deleted |
 | Backend code | `No issues found. Backend approved.` | gateway + services + registry |
 | Database | `Database approved.` | Liquibase migrations apply on fresh PostgreSQL |
 | Nginx & SSL | `Nginx and SSL approved.` | Nginx config, domain routing, Certbot certs, HTTPS redirect |
@@ -160,7 +162,9 @@ Produce **one complete report** that consolidates the whole pipeline. This is th
 ### Stage 0 — Prior-stage completeness (do's and don'ts)
 | Stage | Required verdict present? | Artifacts present? | Complete? |
 |-------|--------------------------|--------------------|-----------|
+| Frontend sanitization (Isha) | yes/no | yes/no | yes/no |
 | Architecture | yes/no | yes/no | yes/no |
+| Supabase removal (Kiran) | yes/no | yes/no | yes/no |
 | Backend code | yes/no | yes/no | yes/no |
 | Database | yes/no | yes/no | yes/no |
 | Nginx & SSL | yes/no | yes/no | yes/no |
@@ -175,10 +179,12 @@ Pull the key result from each context report so the final report is self-contain
 
 | # | Stage / report | Verdict | Key metrics / outcome |
 |---|----------------|---------|------------------------|
-| 1 | Architecture (`architecture-verify-report.md`) | Architecture approved. | services, JDL ok |
-| 2 | Backend code (`verify-report.md`) | Backend approved. | API/security/arch/db pass |
-| 3 | Database (`database-verify-report.md`) | Database approved. | migrations apply on fresh PostgreSQL |
-| 4 | Nginx & SSL (`nginx-verify-report.md`) | Nginx and SSL approved. | HTTPS on domain; Certbot renewal dry-run |
+| 1 | Frontend sanitization (`frontend-sanitize-verify-report.md`) | Frontend sanitization complete. | no Supabase/Lovable; build passes |
+| 2 | Architecture (`architecture-verify-report.md`) | Architecture approved. | services, JDL ok |
+| 3 | Supabase removal (`supabase-removal-verify-report.md`) | Supabase removal complete. | REST clients; folders deleted |
+| 4 | Backend code (`verify-report.md`) | Backend approved. | API/security/arch/db pass |
+| 5 | Database (`database-verify-report.md`) | Database approved. | migrations apply on fresh PostgreSQL |
+| 6 | Nginx & SSL (`nginx-verify-report.md`) | Nginx and SSL approved. | HTTPS on domain; Certbot renewal dry-run |
 | 5 | Backend unit tests (`backend-unit-test-verify-report.md`) | satisfied | line % / branch % |
 | 6 | Backend integration tests (`backend-integration-test-verify-report.md`) | satisfied | line % / branch % (Testcontainers) |
 | 7 | Backend functional tests (`backend-functional-test-verify-report.md`) | satisfied | line % / branch % (REST) |

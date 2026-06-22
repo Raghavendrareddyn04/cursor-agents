@@ -54,8 +54,8 @@ Before any pipeline logic, verify the environment can actually drive Sunny. A mi
 2. `.sunny/` is writable:
    mkdir -p .sunny/context .sunny/web .sunny/scripts
    test -w .sunny
-3. Every stage's agent files exist (22 stages × 3 agents = up to 66 files):
-   for slug in supabase-removal jhipster-backend database nginx \
+3. Every stage's agent files exist (23 stages × 3 agents = up to 69 files):
+   for slug in frontend-sanitize supabase-removal jhipster-backend database nginx \
                backend-unit-test backend-integration-test backend-functional-test \
                frontend-unit-test frontend-integration-test frontend-functional-test \
                system-integration-test swagger javadoc \
@@ -87,7 +87,7 @@ Failures in steps 1–5 block the run with a precise error ("`MISSING: kubectl` 
    6. **Preserve iteration counters** from `state.json` so loop caps still apply across resumes (a run can't dodge its cap by restarting).
    7. **`state.json.schemaVersion` check** — if the on-disk `state.json` carries a `schemaVersion` different from the current Sunny build's, refuse to resume and prompt the user to either run `sunny migrate` (Maya) or start a fresh run. Silent misread of stale state has caused wrong-stage re-entry in past versions.
    8. **`.env` missing on resume** — if `.env` is gone but `state.json` is present, **prompt the user** rather than auto-regenerating. Auto-regen would change K8s secrets, the DB password, and the JWT key — silently invalidating the deployed cluster. Acceptable: user explicitly says "regenerate, I'm starting over."
-   9. **Announce:** `Resuming {project}: stage {label} ({n}/22), iteration {i}.` Then continue the phase machine exactly as a normal run.
+   9. **Announce:** `Resuming {project}: stage {label} ({n}/23), iteration {i}.` Then continue the phase machine exactly as a normal run.
 
 > Resume is **safe to repeat**: if a resumed run is interrupted again, the next invocation picks up from the new checkpoint. Caps and blockers carry forward, so resuming never causes infinite loops or lost "action required" asks.
 
@@ -289,7 +289,7 @@ Each agent has a human codename (a family base name + `Verify`/`Fix`). Refer to 
 | Om (deploy final verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 | Hari (fleet host, standalone) | Hari — `fleet-host-agent` | — | — |
 
-**Singletons:** Sunny — `sunny` (the only orchestrator — full pipeline #1–#22) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only orchestrator — full pipeline #1–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 **Fleet host (Hari):** the global/fleet dashboard is a separate, run-once deployment. On the host that owns the **fleet domain**, invoke **Hari** to stand up the central collector (`.cursor/central/`) with TLS, so all worker VPSs can push to one board at `https://<fleet-domain>/`. Hari is **not** part of the per-project pipeline and does not use the Context Agent. Worker runs only need to be given the fleet domain at kickoff; Maya fetches the push token from `/api/fleet-config` automatically (and retries if Hari has not deployed yet).
 
@@ -306,7 +306,7 @@ Frontend Input → Sunny
   → Architecture:
       architecture-agent → context-agent → architecture-verify-agent
       → [loop if not approved] architecture-fix-agent → context-agent → architecture-verify-agent
-  → Frontend sanitization (Lovable cleanup — runs both before and after architecture):
+  → Frontend sanitization (Isha — before architecture) and Supabase/Lovable removal (Kiran — after architecture, before backend):
       # Phase 0.25 — Isha strips Supabase/Lovable from Lovable exports, leaves compile-safe stubs.
       # Phase 0.65 — Kiran (supabase-removal-agent) wires real REST clients matching the
       # approved API contract, migrates auth to JWT, deletes supabase/ + .lovable/ folders.
@@ -397,11 +397,11 @@ Frontend Input → Sunny
    **Sunny must not start the pipeline if `bin/start-sunny.sh` has not been run successfully** — the rule's Phase −2 self-test requires `DOMAIN`, `ACME_EMAIL`, and `FRONTEND_PATH` to exist in `.env`, and `start-sunny.sh` is what creates them.
 4. Launch **context-agent** with `sourceAgent: intake`, frontend path, requirements, derived domain model, and the deployment inputs. Maya writes `project-context.md` (Deployment & domain section), initializes `state.json` (with `project`, `workflowStartedAt`, seeded `stages[]`), seeds the dashboard bundle in `.sunny/web/`, and **auto-generates the root `.env` with strong secrets** (PostgreSQL password, JWT base64 secret, registry password) plus `DOMAIN`/`ACME_EMAIL` from intake — no human writes secrets. Maya is idempotent: an existing `.env` is never clobbered; only missing keys/secrets are added. Secret values are never echoed to chat, context, or the dashboard.
 5. Confirm `.sunny/context/project-context.md`, `state.json`, `.sunny/web/progress.json`, and the root `.env` (gitignored, secrets generated) exist before proceeding.
-6. **Before launching the deploy phase (#17), point the user at `bin/smoke-test-deploy.sh`** — the Phase 5.0 pre-flight check. They should run:
+6. **Before launching the deploy phase (#18), point the user at `bin/smoke-test-deploy.sh`** — the Phase 5.0 pre-flight check. They should run:
    ```bash
    ./bin/smoke-test-deploy.sh --vps=<IP> --user=<USER> --domain=<DOMAIN>
    ```
-   The script verifies SSH key-based auth, DNS propagation (A record → VPS_IP), inbound ports 22/80/443, and sudo NOPASSWD. If it exits non-zero, Rajesh (#17) **must not launch** — emit a Maya `blockers` row with the precise failure and `howTo` (e.g. *"Add A record for app.example.com → 1.2.3.4, wait 5 min for TTL, then re-run `sunny deploy`"*).
+   The script verifies SSH key-based auth, DNS propagation (A record → VPS_IP), inbound ports 22/80/443, and sudo NOPASSWD. If it exits non-zero, Rajesh (#18) **must not launch** — emit a Maya `blockers` row with the precise failure and `howTo` (e.g. *"Add A record for app.example.com → 1.2.3.4, wait 5 min for TTL, then re-run `sunny deploy`"*).
 7. **Start the early progress publisher** so the run is web-visible from agent #1:
    ```bash
    docker compose -f .sunny/web/docker-compose.yml up -d   # or: PROGRESS_PORT=9090 docker compose -f .sunny/web/docker-compose.yml up -d
@@ -682,13 +682,13 @@ After the exit phrase, proceed to **Phase 5 — Production deployment** (do not 
 
 ## Phase 5 — Production deployment (VPS / Minikube)
 
-Runs **only after** `Final approval granted. System is production-ready.` (dashboard **#16**). Stages **#17–#22** deploy to the VPS with the **same generate → verify (readonly) → fix loop** as architecture, database, and nginx: one generate agent, then a readonly verify agent with an exact exit phrase, then a fix agent on failure (cap 5 per loop). Dashboard **#22** is verify/fix only (Om) — no separate generate agent. Do not mark `phase: complete` until Om emits `Production deployment verified. System is live.`
+Runs **only after** `Final approval granted. System is production-ready.` (dashboard **#17**). Stages **#18–#23** deploy to the VPS with the **same generate → verify (readonly) → fix loop** as architecture, database, and nginx: one generate agent, then a readonly verify agent with an exact exit phrase, then a fix agent on failure (cap 5 per loop). Dashboard **#23** is verify/fix only (Om) — no separate generate agent. Do not mark `phase: complete` until Om emits `Production deployment verified. System is live.`
 
 **Production non-negotiables:** Minikube production profile; kube-prometheus-stack; probes + limits on every pod; Grafana + Sunny `progress.json` integration; `deploy/port-map.md`; host Nginx TLS + PM2; `deploy/scripts/health-check.sh` green before Om final approval.
 
-### 5.0 Pre-flight — VPS reachability (mandatory before #17)
+### 5.0 Pre-flight — VPS reachability (mandatory before #18)
 
-Before launching Rajesh (#17), Sunny MUST verify the deploy target is actually reachable. Catching this here prevents burning 5 Rajesh iterations on a broken network.
+Before launching Rajesh (#18), Sunny MUST verify the deploy target is actually reachable. Catching this here prevents burning 5 Rajesh iterations on a broken network.
 
 Required checks (run on the operator's machine, not on a remote hop):
 
@@ -714,15 +714,15 @@ If any check fails: emit a Maya `blockers` row with `howTo` (e.g. "Add A record 
 
 | Dashboard # | Sub-phase | Codename | Exit phrase |
 |-------------|-----------|----------|-------------|
-| #16 | Production gate | Prakash | `Final approval granted. System is production-ready.` |
-| #17 | Platform | Rajesh | `Deployment platform approved.` |
-| #18 | Provision | Suresh | `Server provisioning approved.` |
-| #19 | Database | Lakshmi | `Deployment database approved.` |
-| #20 | Backend | Manoj | `Deployment backend approved.` |
-| #21 | Edge | Asha | `Deployment edge approved.` |
-| #22 | Final verify | Om | `Production deployment verified. System is live.` |
+| #17 | Production gate | Prakash | `Final approval granted. System is production-ready.` |
+| #18 | Platform | Rajesh | `Deployment platform approved.` |
+| #19 | Provision | Suresh | `Server provisioning approved.` |
+| #20 | Database | Lakshmi | `Deployment database approved.` |
+| #21 | Backend | Manoj | `Deployment backend approved.` |
+| #22 | Edge | Asha | `Deployment edge approved.` |
+| #23 | Final verify | Om | `Production deployment verified. System is live.` |
 
-### 5.1 Deployment platform loop — dashboard #17 (Rajesh)
+### 5.1 Deployment platform loop — dashboard #18 (Rajesh)
 
 **Exit phrase:** `Deployment platform approved.`
 
@@ -739,7 +739,7 @@ repeat:
   9. goto repeat
 ```
 
-### 5.2 Server provisioning loop — dashboard #18 (Suresh)
+### 5.2 Server provisioning loop — dashboard #19 (Suresh)
 
 **Exit phrase:** `Server provisioning approved.`
 
@@ -756,7 +756,7 @@ repeat:
   9. goto repeat
 ```
 
-### 5.3 Deployment database loop — dashboard #19 (Lakshmi)
+### 5.3 Deployment database loop — dashboard #20 (Lakshmi)
 
 **Exit phrase:** `Deployment database approved.`
 
@@ -773,7 +773,7 @@ repeat:
   9. goto repeat
 ```
 
-### 5.4 Deployment backend loop — dashboard #20 (Manoj)
+### 5.4 Deployment backend loop — dashboard #21 (Manoj)
 
 **Exit phrase:** `Deployment backend approved.`
 
@@ -790,7 +790,7 @@ repeat:
   9. goto repeat
 ```
 
-### 5.5 Deployment edge loop — dashboard #21 (Asha)
+### 5.5 Deployment edge loop — dashboard #22 (Asha)
 
 **Exit phrase:** `Deployment edge approved.`
 
@@ -807,7 +807,7 @@ repeat:
   9. goto repeat
 ```
 
-### 5.6 Final deployment verification loop — dashboard #22 (Om)
+### 5.6 Final deployment verification loop — dashboard #23 (Om)
 
 **Exit phrase:** `Production deployment verified. System is live.`
 

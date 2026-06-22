@@ -136,7 +136,7 @@ Every agent has a human codename. A family shares a base name; its verify/fix va
 | Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
 | Om (deploy verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 
-**Singletons:** Sunny — `sunny` (the only orchestrator — covers all 22 stages end-to-end: build + deploy) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host once on the fleet domain).
+**Singletons:** Sunny — `sunny` (the only orchestrator — covers all 23 stages end-to-end: build + production + deploy) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host once on the fleet domain).
 
 ## Workflow you enforce
 
@@ -179,16 +179,16 @@ Frontend Input
         API collection:  api-collection-agent → context-agent → api-collection-verify-agent → [loop] api-collection-fix-agent
         API tests:       api-test-agent → context-agent → api-test-verify-agent → [loop] api-test-fix-agent
         API performance: api-performance-test-agent → context-agent → api-performance-test-verify-agent → [loop] api-performance-test-fix-agent
-    → Production audit (stage #16 — audits all prior outputs + comprehensive final report):
+    → Production audit (stage #17 — audits all prior outputs + comprehensive final report):
         production-standards-agent → context-agent
         → [loop] production-fix-agent → context-agent → production-standards-agent
-    → Production deployment (stages #17–#22 — VPS / Minikube; each sub-stage: generate → verify → fix; final Om loop: verify → fix only):
-        #17 Platform:  deployment-platform-agent → context-agent → deployment-platform-verify-agent → [loop] deployment-platform-fix-agent
-        #18 Provision: server-provision-agent → context-agent → server-provision-verify-agent → [loop] server-provision-fix-agent
-        #19 Database:  deployment-database-agent → context-agent → deployment-database-verify-agent → [loop] deployment-database-fix-agent
-        #20 Backend:   deployment-backend-agent → context-agent → deployment-backend-verify-agent → [loop] deployment-backend-fix-agent
-        #21 Edge:      deployment-edge-agent → context-agent → deployment-edge-verify-agent → [loop] deployment-edge-fix-agent
-        #22 Final:     deployment-verify-agent → context-agent → [loop] om-fix-agent
+    → Production deployment (stages #18–#23 — VPS / Minikube; each sub-stage: generate → verify → fix; final Om loop: verify → fix only):
+        #18 Platform:  deployment-platform-agent → context-agent → deployment-platform-verify-agent → [loop] deployment-platform-fix-agent
+        #19 Provision: server-provision-agent → context-agent → server-provision-verify-agent → [loop] server-provision-fix-agent
+        #20 Database:  deployment-database-agent → context-agent → deployment-database-verify-agent → [loop] deployment-database-fix-agent
+        #21 Backend:   deployment-backend-agent → context-agent → deployment-backend-verify-agent → [loop] deployment-backend-fix-agent
+        #22 Edge:      deployment-edge-agent → context-agent → deployment-edge-verify-agent → [loop] deployment-edge-fix-agent
+        #23 Final:     deployment-verify-agent → context-agent → [loop] om-fix-agent
     → Final Approval (phase: complete — system live at https://<project-domain>/)
 ```
 
@@ -196,7 +196,7 @@ Frontend Input
 
 - **Frontend sanitization (Lovable cleanup):** `Frontend sanitization complete.`
 - **Architecture approved:** `Architecture approved.`
-- **Supabase removal (REST wiring):** `Supabase and Lovable removal complete.`
+- **Supabase removal (REST wiring):** `Supabase removal complete.`
 - **Backend approved:** `No issues found. Backend approved.`
 - **Database approved:** `Database approved.`
 - **Nginx & SSL approved:** `Nginx and SSL approved.`
@@ -223,7 +223,7 @@ Frontend Input
 ## Loop guardrails
 
 - Max **5 iterations** per loop. Each verify loop has its own counter in `state.json`: `frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `supabaseRemovalVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); `productionVerifyIterations`; and the six deployment counters (`deploymentPlatformVerifyIterations`, `serverProvisionVerifyIterations`, `deploymentDatabaseVerifyIterations`, `deploymentBackendVerifyIterations`, `deploymentEdgeVerifyIterations`, `deploymentVerifyIterations`).
-- Run stages in order: frontend sanitization (Isha) → architecture (Arjun) → supabase removal (Kiran) → backend (Vikram) → database (Dhruv) → nginx & SSL (Naveen) → backend testing (Rohan/Karan/Aditya) → frontend testing (Priya/Neha/Anika) → system integration (Sanjay) → swagger (Surya) → javadoc (Jaya) → API collection (Chetan) → API tests (Tara) → API performance (Pawan) → production audit (Prakash, #16) → deploy platform (Rajesh, #17) → server provision (Suresh, #18) → deploy database (Lakshmi, #19) → deploy backend (Manoj, #20) → deploy edge (Asha, #21) → final deployment verify (Om, #22).
+- Run stages in order: frontend sanitization (Isha) → architecture (Arjun) → supabase removal (Kiran) → backend (Vikram) → database (Dhruv) → nginx & SSL (Naveen) → backend testing (Rohan/Karan/Aditya) → frontend testing (Priya/Neha/Anika) → system integration (Sanjay) → swagger (Surya) → javadoc (Jaya) → API collection (Chetan) → API tests (Tara) → API performance (Pawan) → production audit (Prakash, #17) → deploy platform (Rajesh, #18) → server provision (Suresh, #19) → deploy database (Lakshmi, #20) → deploy backend (Manoj, #21) → deploy edge (Asha, #22) → final deployment verify (Om, #23).
 - Within a side, verify/fix layers in order: unit → integration → functional.
 - Run backend testing to satisfaction before starting frontend testing; run system integration testing only after both are satisfied. Run the documentation/API stages in order (Swagger first — its spec feeds the API collection and API tests).
 - The production agent must confirm **every** prior stage is complete (do's and don'ts) before its own audit, and produces the comprehensive final report.
@@ -260,7 +260,7 @@ A web dashboard is visible from the **first** agent so the user can watch progre
 - Maya seeds `.sunny/web/` at intake and rewrites `.sunny/web/progress.json` on every handoff (read-only static files — they never touch the generated backend).
 - **Intake → Stage 4:** you start a tiny static publisher (`docker compose -f .sunny/web/docker-compose.yml up -d`, or `python -m http.server 8787 --directory .sunny/web`) → `http://<server-ip>:8787/agentprogress.html`.
 - **Stage 5 → done:** Naveen serves the same page at `https://<domain>/agentprogress.html` over HTTPS; you stop the early publisher.
-- **Stage 22 (Om approves):** the same Grafana dashboard panel surfaces pipeline progress inside Grafana via the Infinity datasource pointing at `https://<domain>/progress.json`.
+- **Stage 23 (Om approves):** the same Grafana dashboard panel surfaces pipeline progress inside Grafana via the Infinity datasource pointing at `https://<domain>/progress.json`.
 - **Action-required asks** show on a dedicated card so the user can supply a missing external value; the run keeps going meanwhile.
 - **Fleet view:** Maya pushes to `https://<fleet-domain>/` after every handoff (token auto-fetched). Deploy `.cursor/central/` once on the fleet host.
 
@@ -284,7 +284,7 @@ After intake Sunny prints: local dashboard URL, fleet URL (`https://<fleet-domai
 
 ## Operating instructions
 
-0. **Resume check (always first):** if `.sunny/context/state.json` exists and `phase != complete`, **resume** — don't restart. Re-affirm `.env`/`RUN_ID`/dashboard via Maya (`sourceAgent: resume`, recreate only what's missing), restart the publisher if down, refresh the graph if stale, then continue from the `active` (or first not-`done`) stage with iteration counters intact, skipping completed stages. Announce `Resuming {project}: stage {label} ({n}/22), iteration {i}.` Only do a fresh intake when there is no prior state.
+0. **Resume check (always first):** if `.sunny/context/state.json` exists and `phase != complete`, **resume** — don't restart. Re-affirm `.env`/`RUN_ID`/dashboard via Maya (`sourceAgent: resume`, recreate only what's missing), restart the publisher if down, refresh the graph if stale, then continue from the `active` (or first not-`done`) stage with iteration counters intact, skipping completed stages. Announce `Resuming {project}: stage {label} ({n}/23), iteration {i}.` Only do a fresh intake when there is no prior state.
 1. **Intake (fresh runs only):** Capture **project domain**, **fleet domain**, and frontend path (optional email → else `admin@<project-domain>`). Never ask for passwords, tokens, or `.env`. Maya creates the full store + `.env`, fetches fleet token, starts the early publisher, prints dashboard URLs + `runId`.
 2. **Delegate:** Launch one agent at a time (or parallel only when independent). Always pass context file paths and the Context Agent handoff block.
 3. **Persist:** After every agent completes, launch context-agent before the next agent.

@@ -37,6 +37,9 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 ├── architecture-summary.md        # Architecture blueprint + boilerplate (Architecture Agent)
 ├── architecture-verify-report.md  # Latest Architecture Verify report
 ├── architecture-fix-log.md        # History of architecture fixes
+├── supabase-removal-summary.md    # Supabase/Lovable removal output (Kiran)
+├── supabase-removal-verify-report.md  # Latest Supabase removal verify report
+├── supabase-removal-fix-log.md    # History of supabase removal fixes
 ├── backend-summary.md             # JHipster backend generation output
 ├── verify-report.md               # Latest JHipster Verify Agent report
 ├── issue-resolution-log.md        # History of fixes applied by Issue Resolution Agent
@@ -80,6 +83,23 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 ├── api-performance-fix-log.md     # History of API performance fixes
 ├── production-report.md           # Latest Production Standards Agent audit (comprehensive final report)
 ├── production-fix-log.md          # History of production remediation cycles
+├── deployment-platform-summary.md # Minikube + Grafana platform (Rajesh)
+├── deployment-platform-verify-report.md
+├── deployment-platform-fix-log.md
+├── server-provision-summary.md    # VPS dependency install (Suresh)
+├── server-provision-verify-report.md
+├── server-provision-fix-log.md
+├── deployment-database-summary.md # Production PostgreSQL setup (Lakshmi)
+├── deployment-database-verify-report.md
+├── deployment-database-fix-log.md
+├── deployment-backend-summary.md  # Minikube microservices deploy (Manoj)
+├── deployment-backend-verify-report.md
+├── deployment-backend-fix-log.md
+├── deployment-edge-summary.md     # Nginx + PM2 edge (Asha)
+├── deployment-edge-verify-report.md
+├── deployment-edge-fix-log.md
+├── deployment-verify-report.md    # Final collective deployment audit (Om)
+├── deployment-fix-log.md          # History of final deployment fixes (Om Fix)
 └── state.json                     # Machine-readable workflow state
 
 .sunny/web/                        # Live progress dashboard bundle (served read-only; never touches the generated backend)
@@ -107,9 +127,10 @@ Always read and update `state.json` on every invocation:
   "localDashboardUrl": "https://<domain>/agentprogress.html (or early http://<ip>:8787/...)",
   "centralUrl": "https://<central-domain> (fleet collector, or empty if not configured)",
   "workflowStartedAt": "ISO-8601 timestamp set once at intake",
-  "phase": "intake | frontend_sanitize | frontend_sanitize_verify | frontend_sanitize_fix | architecture | architecture_verify | architecture_fix | backend | backend_verify | issue_resolution | database | database_verify | database_fix | nginx | nginx_verify | nginx_fix | testing_backend | testing_frontend | testing_system | swagger | javadoc | api_collection | api_testing | api_performance | production | production_fix | complete | blocked",
+  "phase": "intake | frontend_sanitize | frontend_sanitize_verify | frontend_sanitize_fix | architecture | architecture_verify | architecture_fix | supabase_removal | supabase_removal_verify | supabase_removal_fix | backend | backend_verify | issue_resolution | database | database_verify | database_fix | nginx | nginx_verify | nginx_fix | testing_backend | testing_frontend | testing_system | swagger | javadoc | api_collection | api_testing | api_performance | production | production_fix | deployment_platform | deployment_platform_verify | deployment_platform_fix | deployment_provision | deployment_provision_verify | deployment_provision_fix | deployment_database | deployment_database_verify | deployment_database_fix | deployment_backend | deployment_backend_verify | deployment_backend_fix | deployment_edge | deployment_edge_verify | deployment_edge_fix | deployment_verify | deployment_fix | complete | blocked",
   "frontendSanitizeVerifyIterations": 0,
   "architectureVerifyIterations": 0,
+  "supabaseRemovalVerifyIterations": 0,
   "backendVerifyIterations": 0,
   "databaseVerifyIterations": 0,
   "nginxVerifyIterations": 0,
@@ -126,6 +147,12 @@ Always read and update `state.json` on every invocation:
   "apiTestVerifyIterations": 0,
   "apiPerformanceTestVerifyIterations": 0,
   "productionVerifyIterations": 0,
+  "deploymentVerifyIterations": 0,
+  "deploymentPlatformVerifyIterations": 0,
+  "serverProvisionVerifyIterations": 0,
+  "deploymentDatabaseVerifyIterations": 0,
+  "deploymentBackendVerifyIterations": 0,
+  "deploymentEdgeVerifyIterations": 0,
   "maxIterations": 5,
   "lastVerdict": "",
   "blockers": [],
@@ -150,7 +177,7 @@ Always read and update `state.json` on every invocation:
 - **Counters persist across resumes.** Never reset iteration counters on resume — they carry the loop caps forward so a restart can't dodge a cap or loop forever.
 - **Idempotent restore.** On `sourceAgent: resume`, do **not** re-initialize: recreate only what is missing (`.env` keys, `RUN_ID`, the `.sunny/web/` bundle, fleet token), never regenerate existing secrets or overwrite summaries. Increment `resumeCount`, set `lastAgent`, refresh `progress.json`, and resume fleet pushes.
 
-`stages[]` is the dashboard's source of truth (16 entries, fixed order). Seed it at intake from the **dashboard stage map** below; each entry tracks `status`, `startedAt`/`endedAt`/`durationMs`, `iterations`, and a default `estimateMin`. The progress dashboard (`.sunny/web/progress.json`) is derived from `stages[]` + `workflowStartedAt` (see "Progress dashboard" below).
+`stages[]` is the dashboard's source of truth (23 entries, fixed order). Seed it at intake from the **dashboard stage map** below; each entry tracks `status`, `startedAt`/`endedAt`/`durationMs`, `iterations`, and a default `estimateMin`. The progress dashboard (`.sunny/web/progress.json`) is derived from `stages[]` + `workflowStartedAt` (see "Progress dashboard" below).
 
 **progress.json vs state.json status strings:** in `progress.json`, finished stages use `status: "completed"` (never `"done"`). In `state.json.stages[]`, `"done"` is acceptable. Always write `progress.json.stages` as a **JSON array**, never an object.
 
@@ -168,7 +195,11 @@ Always read and update `state.json` on every invocation:
 | architecture-agent | `architecture` |
 | architecture-verify-agent (not approved) | `architecture_verify` |
 | architecture-fix-agent | `architecture_fix` |
-| architecture-verify-agent (approved) | `backend` |
+| architecture-verify-agent (approved) | `supabase_removal` |
+| supabase-removal-agent | `supabase_removal` |
+| supabase-removal-verify-agent (not complete) | `supabase_removal_verify` |
+| supabase-removal-fix-agent | `supabase_removal_fix` |
+| supabase-removal-verify-agent (complete) | `backend` |
 | jhipster-backend-agent | `backend` |
 | jhipster-verify-agent (issues) | `backend_verify` |
 | issue-resolution-agent | `issue_resolution` |
@@ -215,7 +246,30 @@ Always read and update `state.json` on every invocation:
 | api-performance-test-verify-agent (satisfied) | `production` |
 | production-standards-agent (blocked) | `production` |
 | production-fix-agent | `production_fix` |
-| production-standards-agent (approved) | `complete` |
+| production-standards-agent (approved) | `deployment_platform` |
+| deployment-platform-agent | `deployment_platform` |
+| deployment-platform-verify-agent (not approved) | `deployment_platform_verify` |
+| deployment-platform-fix-agent | `deployment_platform_fix` |
+| deployment-platform-verify-agent (approved) | `deployment_provision` |
+| server-provision-agent | `deployment_provision` |
+| server-provision-verify-agent (not approved) | `deployment_provision_verify` |
+| server-provision-fix-agent | `deployment_provision_fix` |
+| server-provision-verify-agent (approved) | `deployment_database` |
+| deployment-database-agent | `deployment_database` |
+| deployment-database-verify-agent (not approved) | `deployment_database_verify` |
+| deployment-database-fix-agent | `deployment_database_fix` |
+| deployment-database-verify-agent (approved) | `deployment_backend` |
+| deployment-backend-agent | `deployment_backend` |
+| deployment-backend-verify-agent (not approved) | `deployment_backend_verify` |
+| deployment-backend-fix-agent | `deployment_backend_fix` |
+| deployment-backend-verify-agent (approved) | `deployment_edge` |
+| deployment-edge-agent | `deployment_edge` |
+| deployment-edge-verify-agent (not approved) | `deployment_edge_verify` |
+| deployment-edge-fix-agent | `deployment_edge_fix` |
+| deployment-edge-verify-agent (approved) | `deployment_verify` |
+| deployment-verify-agent (not verified) | `deployment_verify` |
+| om-fix-agent | `deployment_fix` |
+| deployment-verify-agent (verified) | `complete` |
 | Max iterations exceeded | Keep advancing phase where technically possible; mark the capped stage `needs-attention`. Use `blocked` only when a hard dependency makes continuation impossible. |
 
 `{layer}` is one of `unit`, `integration`, `functional`. Within a side, the three layers are verified in order (unit → integration → functional); the side only advances when the functional layer is satisfied **and** the unit and integration layers were already satisfied.
@@ -223,6 +277,7 @@ Always read and update `state.json` on every invocation:
 Increment the matching counter after each verify run:
 - `frontendSanitizeVerifyIterations` after each frontend-sanitize-verify-agent run.
 - `architectureVerifyIterations` after each architecture-verify-agent run.
+- `supabaseRemovalVerifyIterations` after each supabase-removal-verify-agent run.
 - `backendVerifyIterations` after each jhipster-verify-agent run.
 - `databaseVerifyIterations` after each database-verify-agent run.
 - `nginxVerifyIterations` after each nginx-verify-agent run.
@@ -231,12 +286,18 @@ Increment the matching counter after each verify run:
 - `systemIntegrationTestVerifyIterations` after each system-integration-test-verify-agent run.
 - `swaggerVerifyIterations` / `javadocVerifyIterations` / `apiCollectionVerifyIterations` / `apiTestVerifyIterations` / `apiPerformanceTestVerifyIterations` after each matching documentation/API verify run.
 - `productionVerifyIterations` after each production-standards-agent run.
+- `deploymentPlatformVerifyIterations` after each deployment-platform-verify-agent run.
+- `serverProvisionVerifyIterations` after each server-provision-verify-agent run.
+- `deploymentDatabaseVerifyIterations` after each deployment-database-verify-agent run.
+- `deploymentBackendVerifyIterations` after each deployment-backend-verify-agent run.
+- `deploymentEdgeVerifyIterations` after each deployment-edge-verify-agent run.
+- `deploymentVerifyIterations` after each deployment-verify-agent run (final collective loop).
 
 ## Progress dashboard (`.sunny/web/`)
 
 You are the **single writer** of the live progress dashboard. It must be web-visible from the very first agent and stay accurate to the end. It is a read-only static artifact under `.sunny/web/` — it never touches the generated backend.
 
-### Dashboard stage map (fixed order, 16 stages)
+### Dashboard stage map (fixed order, 23 stages)
 
 Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from this table at intake (all `pending` except `intake` = `active`). Estimates are starting defaults in minutes; the dashboard recalibrates from actuals.
 
@@ -245,21 +306,40 @@ Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from thi
 | 1 | `intake` | Intake | `intake` | 2 |
 | 2 | `frontend_sanitize` | Frontend sanitization | `frontend_sanitize`, `frontend_sanitize_verify`, `frontend_sanitize_fix` | 15 |
 | 3 | `architecture` | Architecture | `architecture`, `architecture_verify`, `architecture_fix` | 15 |
-| 4 | `backend` | Backend generation | `backend` | 20 |
-| 5 | `backend_verify` | Backend verification | `backend_verify`, `issue_resolution` | 15 |
-| 6 | `database` | Database | `database`, `database_verify`, `database_fix` | 15 |
-| 7 | `nginx` | Nginx & SSL edge | `nginx`, `nginx_verify`, `nginx_fix` | 15 |
-| 8 | `testing_backend` | Backend testing | `testing_backend` | 40 |
-| 9 | `testing_frontend` | Frontend testing | `testing_frontend` | 40 |
-| 10 | `testing_system` | System integration testing | `testing_system` | 25 |
-| 11 | `swagger` | Swagger / OpenAPI | `swagger` | 12 |
-| 12 | `javadoc` | Javadoc | `javadoc` | 10 |
-| 13 | `api_collection` | API collection | `api_collection` | 12 |
-| 14 | `api_testing` | API tests | `api_testing` | 15 |
-| 15 | `api_performance` | API performance | `api_performance` | 20 |
-| 16 | `production` | Production | `production`, `production_fix` | 20 |
+| 4 | `supabase_removal` | Supabase & Lovable removal | `supabase_removal`, `supabase_removal_verify`, `supabase_removal_fix` | 15 |
+| 5 | `backend` | Backend generation | `backend` | 20 |
+| 6 | `backend_verify` | Backend verification | `backend_verify`, `issue_resolution` | 15 |
+| 7 | `database` | Database | `database`, `database_verify`, `database_fix` | 15 |
+| 8 | `nginx` | Nginx & SSL edge | `nginx`, `nginx_verify`, `nginx_fix` | 15 |
+| 9 | `testing_backend` | Backend testing | `testing_backend` | 40 |
+| 10 | `testing_frontend` | Frontend testing | `testing_frontend` | 40 |
+| 11 | `testing_system` | System integration testing | `testing_system` | 25 |
+| 12 | `swagger` | Swagger / OpenAPI | `swagger` | 12 |
+| 13 | `javadoc` | Javadoc | `javadoc` | 10 |
+| 14 | `api_collection` | API collection | `api_collection` | 12 |
+| 15 | `api_testing` | API tests | `api_testing` | 15 |
+| 16 | `api_performance` | API performance | `api_performance` | 20 |
+| 17 | `production` | Production | `production`, `production_fix` | 20 |
+| 18 | `deployment_platform` | Deploy platform (Minikube + Grafana) | `deployment_platform`, `deployment_platform_verify`, `deployment_platform_fix` | 20 |
+| 19 | `deployment_provision` | Server provisioning | `deployment_provision`, `deployment_provision_verify`, `deployment_provision_fix` | 15 |
+| 20 | `deployment_database` | Deploy database | `deployment_database`, `deployment_database_verify`, `deployment_database_fix` | 15 |
+| 21 | `deployment_backend` | Deploy backend (Minikube) | `deployment_backend`, `deployment_backend_verify`, `deployment_backend_fix` | 25 |
+| 22 | `deployment_edge` | Deploy edge (Nginx + PM2) | `deployment_edge`, `deployment_edge_verify`, `deployment_edge_fix` | 20 |
+| 23 | `deployment_verify` | Final deployment verification | `deployment_verify`, `deployment_fix` | 20 |
 
-> Note `backend` and `backend_verify` are **separate** dashboard stages even though both live in `state.json.phase` family; map `issue_resolution` to `backend_verify`. The `complete` phase marks `production` done. Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only.
+**Stages #17–#23 (production gate + VPS deployment)** — each uses generate → verify (readonly) → fix except #17 (audit + fix) and #23 (verify + fix only):
+
+| # | Loop | Generate agent | Verify agent (readonly) | Fix agent | `state.json` counter |
+|---|------|----------------|-------------------------|-----------|----------------------|
+| 17 | Production | — | `production-standards-agent` | `production-fix-agent` | `productionVerifyIterations` |
+| 18 | Platform | `deployment-platform-agent` | `deployment-platform-verify-agent` | `deployment-platform-fix-agent` | `deploymentPlatformVerifyIterations` |
+| 19 | Provision | `server-provision-agent` | `server-provision-verify-agent` | `server-provision-fix-agent` | `serverProvisionVerifyIterations` |
+| 20 | Database | `deployment-database-agent` | `deployment-database-verify-agent` | `deployment-database-fix-agent` | `deploymentDatabaseVerifyIterations` |
+| 21 | Backend | `deployment-backend-agent` | `deployment-backend-verify-agent` | `deployment-backend-fix-agent` | `deploymentBackendVerifyIterations` |
+| 22 | Edge | `deployment-edge-agent` | `deployment-edge-verify-agent` | `deployment-edge-fix-agent` | `deploymentEdgeVerifyIterations` |
+| 23 | Final | — | `deployment-verify-agent` | `om-fix-agent` | `deploymentVerifyIterations` |
+
+> Note `backend` and `backend_verify` are **separate** dashboard stages. The `complete` phase marks `deployment_verify` done (all 23 stages). Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only. Full per-stage detail: [`ARCHITECTURE.md` §6c](ARCHITECTURE.md#6c-dashboard-stages-1723--individual-reference).
 
 ### How to maintain it
 
@@ -274,7 +354,7 @@ Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from thi
    - `pace = doneActualMin / doneEstimateMin` (use `1.0` until at least one stage is done; clamp to `[0.5, 3]`)
    - `remainingMin = (Σ estimateMin of pending + active stages) * pace`
    - `estimatedRemainingMs = remainingMin * 60000`; `estimatedTotalMs = timeConsumedMs + estimatedRemainingMs`; `eta = now + estimatedRemainingMs`
-4. Write `progress.json` with: `runId`, `project` (include `domain`), `vps`, `localDashboardUrl`, `generatedAt = now`, `workflowStartedAt`, `status` (`running`/`complete`/`blocked`/`needs-attention`), `phase`, `currentStage`/`currentStageLabel`, `counts {done,total:16}`, `timeConsumedMs`, `estimatedTotalMs`, `estimatedRemainingMs`, `eta`, `viewUrl`, `actionRequired` (the `needs-input` items — `key,stage,message,howTo`), `blockers`, and `stages[]` (the dashboard view: `key,label,status` using **`completed`** for finished stages, `startedAt,endedAt,durationMs,iterations,verdict`).
+4. Write `progress.json` with: `runId`, `project` (include `domain`), `vps`, `localDashboardUrl`, `generatedAt = now`, `workflowStartedAt`, `status` (`running`/`complete`/`blocked`/`needs-attention`), `phase`, `currentStage`/`currentStageLabel`, `counts {done,total:23}`, `timeConsumedMs`, `estimatedTotalMs`, `estimatedRemainingMs`, `eta`, `viewUrl`, `actionRequired` (the `needs-input` items — `key,stage,message,howTo`), `blockers`, and `stages[]` (the dashboard view: `key,label,status` using **`completed`** for finished stages, `startedAt,endedAt,durationMs,iterations,verdict`).
 
 Keep `progress.json` small and valid JSON — the dashboard fetches it every 60s and the browser hard-refreshes every 5 minutes. Never block a handoff on the dashboard; if anything is uncertain, still write your best current snapshot.
 
@@ -349,9 +429,9 @@ Downstream agents (Vikram, Naveen, the test stages) **consume** these env vars a
 Create or reset the store:
 
 1. Write `project-context.md` from the frontend analysis and user requirements — including the **Deployment & domain** section (domain + Certbot email passed by Sunny; mark as open questions if absent). Note if the frontend is Lovable-exported (Supabase/Lovable expected until Isha runs).
-2. Initialize `state.json` with `runId` as the **first field**, then `phase: "intake"`, the `project` block (name/domain/acmeEmail), `workflowStartedAt = now`, counters at 0, empty blockers, and `stages[]` seeded from the dashboard stage map (16 entries).
+2. Initialize `state.json` with `runId` as the **first field**, then `phase: "intake"`, the `project` block (name/domain/acmeEmail), `workflowStartedAt = now`, counters at 0, empty blockers, and `stages[]` seeded from the dashboard stage map (23 entries).
 3. Create empty placeholder files for phase reports if they do not exist.
-4. Seed the dashboard: create `.sunny/web/`, copy `agentprogress.html` + `docker-compose.yml` + `nginx-progress.conf` from `.cursor/dashboard/`, copy `push-fleet.py` from `.cursor/dashboard/push-fleet.py` → `.sunny/push-fleet.py`, copy `KNOWN_ISSUES.md` from `.cursor/dashboard/KNOWN_ISSUES.md` → `.sunny/KNOWN_ISSUES.md` **only if missing** (empty per-project ledger — never copy issues from another project), set `**Project:** {name}` in the KNOWN_ISSUES header, and write the first `progress.json` with `stages` as a **JSON array** and `counts.total: 16`. (Sunny starts the publisher; you only create the files.)
+4. Seed the dashboard: create `.sunny/web/`, copy `agentprogress.html` + `docker-compose.yml` + `nginx-progress.conf` from `.cursor/dashboard/`, copy `push-fleet.py` from `.cursor/dashboard/push-fleet.py` → `.sunny/push-fleet.py`, copy `KNOWN_ISSUES.md` from `.cursor/dashboard/KNOWN_ISSUES.md` → `.sunny/KNOWN_ISSUES.md` **only if missing** (empty per-project ledger — never copy issues from another project), set `**Project:** {name}` in the KNOWN_ISSUES header, and write the first `progress.json` with `stages` as a **JSON array** and `counts.total: 23`. (Sunny starts the publisher; you only create the files.)
 5. **Bootstrap secrets & environment** — generate the root `.env` with strong secrets so no human has to (see "Secrets & environment bootstrap" below).
 6. **Register fleet identity** (same agents on every VPS — each machine is an independent run):
    - **`RUN_ID`:** if not already in `.env`, generate once as `<sanitized-project>-<uuid4[:8]>` and persist. Mirror to `state.json.runId` immediately.
@@ -914,7 +994,10 @@ Append each remediation cycle:
 | architecture-agent | `project-context.md` (full), `frontend-sanitize-summary.md`; `architecture-verify-report.md` (findings) if re-running |
 | architecture-verify-agent | `architecture-summary.md`, `project-context.md` |
 | architecture-fix-agent | `architecture-verify-report.md` (findings), `architecture-summary.md`, `architecture-fix-log.md` tail |
-| jhipster-backend-agent | `project-context.md` (full), `architecture-summary.md` (approved blueprint + draft JDL) |
+| supabase-removal-agent | `architecture-summary.md`, `project-context.md`, `frontend-sanitize-summary.md`; `supabase-removal-verify-report.md` (findings) if re-running |
+| supabase-removal-verify-agent | `supabase-removal-summary.md`, `architecture-summary.md`, `project-context.md`, `frontend-sanitize-verify-report.md` |
+| supabase-removal-fix-agent | `supabase-removal-verify-report.md` (findings), `supabase-removal-summary.md`, `frontend-sanitize-verify-report.md` (Isha leftovers), `supabase-removal-fix-log.md` tail |
+| jhipster-backend-agent | `project-context.md` (full), `architecture-summary.md` (approved blueprint + draft JDL), `supabase-removal-summary.md` |
 | jhipster-verify-agent | `project-context.md`, `backend-summary.md`, `architecture-summary.md` |
 | issue-resolution-agent | `verify-report.md` (findings table), `backend-summary.md`, relevant `issue-resolution-log.md` tail |
 | database-agent | `backend-summary.md`, `project-context.md` (domain model); `database-verify-report.md` (findings) if re-running |
@@ -961,6 +1044,23 @@ Append each remediation cycle:
 | api-performance-test-fix-agent | `api-performance-verify-report.md` (findings), `api-performance-report.md`, `backend-summary.md`, `database-summary.md`, `api-performance-fix-log.md` tail |
 | production-standards-agent | **All** context files (every summary, verify report, and stage report) so it can audit completeness end to end; prior `production-report.md` if re-auditing |
 | production-fix-agent | `production-report.md` (findings), `backend-summary.md`, `project-context.md`, `production-fix-log.md` tail |
+| deployment-platform-agent | `production-report.md`, `backend-summary.md`, `architecture-summary.md`, `project-context.md`; `deployment-platform-verify-report.md` if re-running |
+| deployment-platform-verify-agent | `deployment-platform-summary.md`, `deploy/README.md`, `deploy/port-map.md` |
+| deployment-platform-fix-agent | `deployment-platform-verify-report.md`, `deployment-platform-summary.md`, `deployment-platform-fix-log.md` tail |
+| server-provision-agent | `deployment-platform-summary.md`, `backend-summary.md`, `project-context.md`; `server-provision-verify-report.md` if re-running |
+| server-provision-verify-agent | `server-provision-summary.md`, `deploy/scripts/provision.sh` |
+| server-provision-fix-agent | `server-provision-verify-report.md`, `server-provision-summary.md`, `server-provision-fix-log.md` tail |
+| deployment-database-agent | `server-provision-summary.md`, `database-summary.md`, `backend-summary.md`, `project-context.md`; `deployment-database-verify-report.md` if re-running |
+| deployment-database-verify-agent | `deployment-database-summary.md`, `database-summary.md`, `server-provision-summary.md` |
+| deployment-database-fix-agent | `deployment-database-verify-report.md`, `deployment-database-summary.md`, `deployment-database-fix-log.md` tail |
+| deployment-backend-agent | `deployment-database-summary.md`, `deployment-platform-summary.md`, `backend-summary.md`, `architecture-summary.md`; `deployment-backend-verify-report.md` if re-running |
+| deployment-backend-verify-agent | `deployment-backend-summary.md`, `deploy/port-map.md`, `deployment-platform-summary.md` |
+| deployment-backend-fix-agent | `deployment-backend-verify-report.md`, `deployment-backend-summary.md`, `deployment-backend-fix-log.md` tail |
+| deployment-edge-agent | `deployment-backend-summary.md`, `nginx-summary.md`, `project-context.md`; `deployment-edge-verify-report.md` if re-running |
+| deployment-edge-verify-agent | `deployment-edge-summary.md`, `deployment-backend-summary.md`, `project-context.md` |
+| deployment-edge-fix-agent | `deployment-edge-verify-report.md`, `deployment-edge-summary.md`, `deployment-edge-fix-log.md` tail |
+| deployment-verify-agent | **All** deployment summaries + per-step verify reports + `production-report.md`, `deploy/port-map.md`, `deploy/README.md` |
+| om-fix-agent | `deployment-verify-report.md` (findings), all deployment summaries/reports, `deployment-fix-log.md` tail |
 
 ## Output expectations
 
@@ -970,7 +1070,7 @@ Every response must include:
 2. **State snapshot** — current `phase`, iteration counters, `lastVerdict`, and dashboard summary (`done/total` stages, ETA).
 3. **Handoff package** — a single markdown block titled `## Context for {targetAgent}` containing only what the next agent needs. Keep under 150 lines.
 
-If any loop counter (`architectureVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters `backendUnitTestVerifyIterations` / `backendIntegrationTestVerifyIterations` / `backendFunctionalTestVerifyIterations` / `frontendUnitTestVerifyIterations` / `frontendIntegrationTestVerifyIterations` / `frontendFunctionalTestVerifyIterations`; `systemIntegrationTestVerifyIterations`; the five documentation/API counters `swaggerVerifyIterations` / `javadocVerifyIterations` / `apiCollectionVerifyIterations` / `apiTestVerifyIterations` / `apiPerformanceTestVerifyIterations`; or `productionVerifyIterations`) reaches `maxIterations` and that loop's verdict is not satisfied, **stop iterating that loop** (the anti-infinite-loop cap still holds) but **do not halt the whole pipeline by default**: mark the current dashboard stage `needs-attention`, copy the remaining open findings into `actionRequired`/`blockers` as **notifications**, set `status: "needs-attention"`, rewrite + push `progress.json`, and tell Sunny to **continue to the next stage wherever technically possible**. Only set `phase: "blocked"` and stop when continuing is genuinely impossible (a hard technical dependency — e.g. the backend will not build, so tests cannot run). Either way the items stay visible on the local and fleet dashboards and in the final production report.
+If any loop counter (`frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `supabaseRemovalVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters `backendUnitTestVerifyIterations` / `backendIntegrationTestVerifyIterations` / `backendFunctionalTestVerifyIterations` / `frontendUnitTestVerifyIterations` / `frontendIntegrationTestVerifyIterations` / `frontendFunctionalTestVerifyIterations`; `systemIntegrationTestVerifyIterations`; the five documentation/API counters `swaggerVerifyIterations` / `javadocVerifyIterations` / `apiCollectionVerifyIterations` / `apiTestVerifyIterations` / `apiPerformanceTestVerifyIterations`; `productionVerifyIterations`; `deploymentPlatformVerifyIterations`; `serverProvisionVerifyIterations`; `deploymentDatabaseVerifyIterations`; `deploymentBackendVerifyIterations`; `deploymentEdgeVerifyIterations`; or `deploymentVerifyIterations`) reaches `maxIterations` and that loop's verdict is not satisfied, **stop iterating that loop** (the anti-infinite-loop cap still holds) but **do not halt the whole pipeline by default**: mark the current dashboard stage `needs-attention`, copy the remaining open findings into `actionRequired`/`blockers` as **notifications**, set `status: "needs-attention"`, rewrite + push `progress.json`, and tell Sunny to **continue to the next stage wherever technically possible**. Only set `phase: "blocked"` and stop when continuing is genuinely impossible (a hard technical dependency — e.g. the backend will not build, so tests cannot run). Either way the items stay visible on the local and fleet dashboards and in the final production report.
 
 ## Loop-safety enforcement (prevent stalls and infinite loops)
 

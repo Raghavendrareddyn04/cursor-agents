@@ -211,7 +211,7 @@
       var sinceFetch = performance.now() - fetchedAt;
 
       var stages = normalizeStages(data.stages);
-      var total = (data.counts && data.counts.total) || stages.length || 16;
+      var total = (data.counts && data.counts.total) || stages.length || 0;
       var done = (data.counts && data.counts.done);
       if (done == null) done = stages.filter(isStageDone).length;
       var pct = total ? Math.round((done / total) * 100) : 0;

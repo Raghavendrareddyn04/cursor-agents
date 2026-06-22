@@ -134,7 +134,7 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 | Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
 | Om (deploy verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 
-**Singletons:** Sunny — `sunny` (the only orchestrator — covers all 22 stages end-to-end: build #1–#16 + deploy #17–#22) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only orchestrator — covers all 23 stages end-to-end: build #1–#16 + production #17 + deploy #18–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 ---
 
@@ -557,7 +557,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,OM: Stage 22 - Deploy final audit (Om, max 5)
+    Note over S,OM: Stage 23 - Deploy final audit (Om, max 5)
     S->>OM: Final deployment audit (health-check, port-map, dashboards, smoke)
     S->>C: Persist deployment-verify-report.md
     loop Until "Production deployment verified. System is live." or max iterations

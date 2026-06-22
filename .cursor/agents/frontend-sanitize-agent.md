@@ -61,6 +61,16 @@ Grep targets: `supabase`, `lovable`, `@lovable`, `SUPABASE_`, `__lovableEvents`,
 - **`__root.tsx`:** remove `reportLovableError`; replace Lovable meta (`"Lovable App"`, `@Lovable`, lovable.app images) with project-neutral titles from `project-context.md`
 - **`.env` / `.env.example`:** remove `SUPABASE_*`, `VITE_SUPABASE_*`
 
+## Scope boundary (Isha vs Kiran)
+
+| You (Isha) | Kiran (`supabase-removal-agent`, Phase 0.65) |
+|------------|-----------------------------------------------|
+| Strip deps, branding, folders, env refs | Wire REST clients per `architecture-summary.md` |
+| Compile-safe stubs / TODOs only | Delete `supabase/` + `.lovable/` after migration |
+| Runs **before** architecture | Runs **after** architecture approved, **before** backend |
+
+**Stop before REST wiring.** Do not create API service modules, map Supabase calls to gateway endpoints, or implement JWT login — that is Kiran's job once Arjun's blueprint exists. If Isha's verify loop caps at 5 with leftover Supabase/Lovable findings, Kiran Fix **must** close them.
+
 ## What you do NOT do
 
 - Implement full JWT login flow, gateway API client, or backend field renames (`supabaseUserId` → `userId`)
