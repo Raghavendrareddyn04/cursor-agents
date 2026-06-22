@@ -134,7 +134,7 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 | Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
 | Om (deploy verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 
-**Singletons:** Sunny — `sunny` (the only orchestrator — covers all 23 stages end-to-end: build #1–#16 + production #17 + deploy #18–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only full orchestrator — covers all 23 stages end-to-end: build #1–#16 + production #17 + deploy #18–#23) · **Bunny** — `bunny` (deployment-only orchestrator, dashboard #17–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 ---
 
@@ -201,11 +201,11 @@ flowchart TD
         DGEN["Swagger -> Javadoc -> API collection -> API tests -> API performance"]
         DLOOP["each stage: {stage}-agent -> {stage}-verify-agent<br/>-> [loop if gaps] {stage}-fix-agent"]
     end
-    subgraph prod [Stage 16 - Production Audit Loop]
+    subgraph prod [Dashboard #17 - Production Audit Loop]
         PROD["Production Standards Agent<br/>(audits ALL prior outputs + final report)"]
         PFIX[Production Fix Agent]
     end
-    subgraph deploy [Stages 17-22 - Deployment Tail (VPS / Minikube)]
+    subgraph deploy [Dashboard #18-23 - Deployment Tail (VPS / Minikube)]
         RAJ["Rajesh — deployment-platform-agent<br/>(Minikube + kubectl + Helm + Grafana)"]
         SUR["Suresh — server-provision-agent<br/>(host deps: Java/Node/Docker/PM2/Nginx)"]
         LAK["Lakshmi — deployment-database-agent<br/>(host PostgreSQL)"]
@@ -475,7 +475,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,PF: Stage 16 - Production loop (audits ALL prior outputs, max 5)
+    Note over S,PF: Dashboard #17 - Production loop (audits ALL prior outputs, max 5)
     loop Until "Final approval granted" or max iterations
         S->>P: Final audit
         S->>C: Persist production-report.md
@@ -487,7 +487,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,RAJ: Stage 17 - Deploy platform (Rajesh, max 5)
+    Note over S,RAJ: Dashboard #18 - Deploy platform (Rajesh, max 5)
     S->>RAJ: Install Minikube + kubectl + Helm + kube-prometheus-stack + Grafana
     S->>C: Persist deployment-platform-summary.md
     loop Until "Deployment platform approved" or max iterations
@@ -501,7 +501,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,SUR: Stage 18 - Server provision (Suresh, max 5)
+    Note over S,SUR: Dashboard #19 - Server provision (Suresh, max 5)
     S->>SUR: Install host deps (Java/Node/Docker/PM2/Nginx); open firewall ports
     S->>C: Persist server-provision-summary.md
     loop Until "Server provisioning approved" or max iterations
@@ -515,7 +515,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,LAK: Stage 19 - Deploy database (Lakshmi, max 5)
+    Note over S,LAK: Dashboard #20 - Deploy database (Lakshmi, max 5)
     S->>LAK: Provision host PostgreSQL; emit host.min.internal:5432 alias for pods
     S->>C: Persist deployment-database-summary.md
     loop Until "Deployment database approved" or max iterations
@@ -529,7 +529,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,MAN: Stage 20 - Deploy backend (Manoj, max 5)
+    Note over S,MAN: Dashboard #21 - Deploy backend (Manoj, max 5)
     S->>MAN: Build images; apply K8s Deployments/Services/ServiceMonitors
     S->>C: Persist deployment-backend-summary.md
     loop Until "Deployment backend approved" or max iterations
@@ -543,7 +543,7 @@ sequenceDiagram
         end
     end
 
-    Note over S,ASH: Stage 21 - Deploy edge (Asha, max 5)
+    Note over S,ASH: Dashboard #22 - Deploy edge (Asha, max 5)
     S->>ASH: Host Nginx (TLS) + PM2 frontend + DNS + cert
     S->>C: Persist deployment-edge-summary.md
     loop Until "Deployment edge approved" or max iterations
@@ -605,7 +605,7 @@ The orchestrator looks for **exact** verdict phrases to exit each loop:
 | Deployment edge | `Deployment edge approved.` | Deployment Edge Verify Agent (Asha Verify) |
 | Deployment final audit | `Production deployment verified. System is live.` | Deployment Verify Agent (Om) |
 
-Each loop has a **max-iteration cap (default 5)** tracked in `state.json`. Each loop has its own counter: `frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `supabaseRemovalVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); `productionVerifyIterations`; and the six deploy counters (`deploymentPlatformVerifyIterations`, `serverProvisionVerifyIterations`, `deploymentDatabaseVerifyIterations`, `deploymentBackendVerifyIterations`, `deploymentEdgeVerifyIterations`, `deploymentVerifyIterations`). Stages run in order across **22** stages (frontend sanitization → architecture → Supabase removal → backend → database → nginx & SSL → backend tests → frontend tests → system integration tests → Swagger → Javadoc → API collection → API tests → API performance → production → deploy platform Rajesh → server provision Suresh → deploy database Lakshmi → deploy backend Manoj → deploy edge Asha → deploy final audit Om); within a side the layers run in order (unit → integration → functional). When findings occur, Sunny invokes **Leela** (`issues-log-agent`) to append `.sunny/KNOWN_ISSUES.md`. If any loop hits the cap without its exit phrase, Sunny marks that stage `needs-attention`, records the open findings as dashboard notifications, and continues wherever technically possible; it sets `phase: "blocked"` only when a hard dependency makes the next stage impossible.
+Each loop has a **max-iteration cap (default 5)** tracked in `state.json`. Each loop has its own counter: `frontendSanitizeVerifyIterations`; `architectureVerifyIterations`; `supabaseRemovalVerifyIterations`; `backendVerifyIterations`; `databaseVerifyIterations`; `nginxVerifyIterations`; the six per-layer test counters (`backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations`, `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations`); `systemIntegrationTestVerifyIterations`; the five documentation/API counters (`swaggerVerifyIterations`, `javadocVerifyIterations`, `apiCollectionVerifyIterations`, `apiTestVerifyIterations`, `apiPerformanceTestVerifyIterations`); `productionVerifyIterations`; and the six deploy counters (`deploymentPlatformVerifyIterations`, `serverProvisionVerifyIterations`, `deploymentDatabaseVerifyIterations`, `deploymentBackendVerifyIterations`, `deploymentEdgeVerifyIterations`, `deploymentVerifyIterations`). Stages run in order across **23 dashboard stages** (intake #1, then Isha #2 through Om #23 — see [`ARCHITECTURE.md`](ARCHITECTURE.md#per-step-deployment-exit-phrases-dashboard-1723)); within a side the layers run in order (unit → integration → functional). When findings occur, Sunny invokes **Leela** (`issues-log-agent`) to append `.sunny/KNOWN_ISSUES.md`. If any loop hits the cap without its exit phrase, Sunny marks that stage `needs-attention`, records the open findings as dashboard notifications, and continues wherever technically possible; it sets `phase: "blocked"` only when a hard dependency makes the next stage impossible.
 
 ---
 

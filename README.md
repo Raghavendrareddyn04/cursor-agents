@@ -1,8 +1,8 @@
 # Sunny — Multi-Agent Backend Engineering System
 
-A collection of **Cursor AI agents** that turn a frontend application into a complete, enterprise-grade **JHipster microservices** backend — fully generated, verified, tested to 95%+ coverage, and audited for production readiness.
+A collection of **Cursor AI agents** that turn a frontend application into a complete, enterprise-grade **JHipster microservices** backend — fully generated, verified, tested to 95%+ coverage, audited for production readiness, and **deployed live on a VPS** (Minikube + Grafana + Nginx + PM2 + PostgreSQL) through **23 dashboard stages**.
 
-At the center is **Sunny**, an orchestrator that coordinates specialized agents through continuous verify → fix and test → verify loops until every quality gate passes. **Isha** strips Supabase/Lovable from Lovable-exported frontends before architecture; **Leela** logs per-project issues to `.sunny/KNOWN_ISSUES.md`. Agents use **Graphify** (`graphify update`) for token-efficient codebase context. A standalone **documentation** agent (Swagger + Postman + Javadoc) is also included.
+At the center is **Sunny**, the full-pipeline orchestrator (#1–#23). **Bunny** (`@bunny`) is an optional shortcut for deploy-only runs (#17–#23). **Isha** strips Supabase/Lovable before architecture; **Kiran** wires REST clients after architecture. **Leela** logs per-project issues to `.sunny/KNOWN_ISSUES.md`. Agents use **Graphify** (`graphify update`) for token-efficient codebase context. A standalone **documentation** agent (Swagger + Postman + Javadoc) is also included.
 
 ---
 
@@ -14,7 +14,8 @@ This repository contains **agent definitions and orchestration rules** for Curso
 bin/                                # Bootstrap scripts (start-sunny.sh, smoke-test-deploy.sh)
 .cursor/
 ├── rules/
-│   ├── sunny-orchestrator.mdc      # Executable playbook the orchestrator follows
+│   ├── sunny-orchestrator.mdc      # Executable playbook — full pipeline #1–#23
+│   ├── bunny-orchestrator.mdc      # Deploy-only playbook — stages #17–#23
 │   └── graphify.mdc                # Query-first context via graphify-out/ (token savings)
 ├── dashboard/                      # Live progress dashboard bundle (copied to .sunny/web/ at intake)
 │   ├── agentprogress.html
@@ -333,17 +334,17 @@ The whole system runs as a Docker Compose stack (PostgreSQL + registry + gateway
 
 ## Production deployment (VPS / Minikube)
 
-After the production audit (Prakash) emits `Final approval granted. System is production-ready.`, Sunny continues into the **production deployment tail** — six sub-stages that bring the system live on the VPS with Minikube, Grafana, host Nginx, PM2, and PostgreSQL. Each sub-stage follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage.
+After the production audit (Prakash, dashboard **#17**) emits `Final approval granted. System is production-ready.`, Sunny continues into the **production deployment tail** — six sub-stages (#18–#23) that bring the system live on the VPS with **Minikube**, **Grafana**, host **Nginx**, **PM2**, and **PostgreSQL**. Each sub-stage follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage. **`@bunny`** can run stages #17–#23 alone when the build pipeline is already complete.
 
 | # | Codename | What it does | Exit phrase |
 |---|----------|--------------|-------------|
-| 16 | **Prakash** | Production audit (gate) | `Final approval granted. System is production-ready.` |
-| 17 | **Rajesh** | Minikube + kube-prometheus-stack + Grafana + `deploy/` scaffold | `Deployment platform approved.` |
-| 18 | **Suresh** | VPS host deps (Java, Node, Postgres, Nginx, PM2, Docker) | `Server provisioning approved.` |
-| 19 | **Lakshmi** | Production PostgreSQL on VPS; wires K8s secret | `Deployment database approved.` |
-| 20 | **Manoj** | Minikube Deployments/Services/ServiceMonitors per microservice | `Deployment backend approved.` |
-| 21 | **Asha** | Host Nginx (TLS via Certbot) + PM2 frontend + `/api` routing | `Deployment edge approved.` |
-| 22 | **Om** | End-to-end audit + `health-check.sh` + port-map match | `Production deployment verified. System is live.` |
+| 17 | **Prakash** | Production audit (gate) | `Final approval granted. System is production-ready.` |
+| 18 | **Rajesh** | Minikube + kube-prometheus-stack + Grafana + `deploy/` scaffold | `Deployment platform approved.` |
+| 19 | **Suresh** | VPS host deps (Java, Node, Postgres, Nginx, PM2, Docker) | `Server provisioning approved.` |
+| 20 | **Lakshmi** | Production PostgreSQL on VPS; wires K8s secret | `Deployment database approved.` |
+| 21 | **Manoj** | Minikube Deployments/Services/ServiceMonitors per microservice | `Deployment backend approved.` |
+| 22 | **Asha** | Host Nginx (TLS via Certbot) + PM2 frontend + `/api` routing | `Deployment edge approved.` |
+| 23 | **Om** | End-to-end audit + `health-check.sh` + port-map match | `Production deployment verified. System is live.` |
 
 **Topology** (see [`deploy/README.md`](deploy/README.md) for the full operator guide):
 

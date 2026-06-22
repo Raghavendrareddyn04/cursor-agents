@@ -10,7 +10,7 @@ A practical guide: what happens when you say **"Sunny, build the backend…"** t
 
 | Piece | What it is | Where it lives |
 |-------|------------|----------------|
-| **cursor-agents** | Sunny agent **definitions** (82 specialists: Arjun, Isha, Vikram, Naveen, Prakash, Rajesh, …) + orchestration **playbook** (22 stages: build #1–#16 + deploy tail #17–#22) | `/opt/cursor-agents/.cursor/` |
+| **cursor-agents** | Sunny agent **definitions** (~75 specialists: Isha, Arjun, Kiran, Vikram, Naveen, Prakash, Rajesh, …) + orchestration **playbook** (23 dashboard stages: build #1–#16 + production #17 + Minikube deploy #18–#23) | `/opt/cursor-agents/.cursor/` |
 | **Hermes Agent** | The **runtime** that actually runs tools (terminal, files, web, delegate sub-tasks) | `/root/.hermes/` |
 | **Sunny bridge skill** | Instructions that tell Hermes *"act like Sunny and follow the playbook"* | `/root/.hermes/skills/devops/sunny/SKILL.md` |
 

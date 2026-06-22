@@ -10,14 +10,10 @@ Accurate status after reconciling `.cursor/` with `reference-new/`. Use this fil
 
 | Layer | Status |
 |-------|--------|
-| Deployment agent `.md` files + codename aliases | On disk |
-| Bunny deploy-only orchestrator (#17–#23) | Aligned |
-| Maya (`context-agent.md`) 23-stage contract | **Fixed** — phases, counters, dashboard map, deploy handoffs |
-| Sunny full orchestrator (#1–#23) | **Fixed** — `sunny-orchestrator.mdc`, `sunny.md`, `ARCHITECTURE.md` |
-| Isha + Kiran boundary (pre-arch vs post-arch) | **Clarified** in agent files + orchestrator |
-| `deploy/` Minikube/Grafana assets | Present; current tree is a **superset** of `reference-new/deploy/` (see §4) |
-
-Sunny can now track intake → Isha → Arjun → Kiran → … → Prakash (#17) → Rajesh→Om (#18–#23) without skipping deployment or marking `complete` early.
+| Orchestration contract (Maya + Sunny + Bunny playbooks) | Aligned — 23 stages, deploy phases, unified counters |
+| Architecture diagrams + README + AGENT-GUIDE | Updated — Minikube deploy tail #18–#23, production #17 |
+| Deployment agent files + `deploy/` assets | On disk; current `deploy/` is a superset of `reference-new/` |
+| End-to-end VPS run | **Not auto-verified here** — run `bin/smoke-test-deploy.sh` + one Sunny deploy on your VPS |
 
 ---
 

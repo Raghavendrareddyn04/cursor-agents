@@ -97,8 +97,9 @@ flowchart TB
         SF["Stage 9 - Frontend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
         SI["Stage 10 - System integration tests (collective)<br/>frontend + backend + PostgreSQL together<br/>system-integration-test-agent<br/>verify: system-integration-test-verify-agent (readonly)<br/>fix: system-integration-test-fix-agent"]
         SDOC["Stages 11-15 - Documentation & API<br/>Swagger -> Javadoc -> API collection -> API tests -> API performance<br/>each: generate + verify (readonly) + fix loop"]
-        S5["Stage 16 - Production (readonly audit)<br/>production-standards-agent: audits ALL prior outputs<br/>+ comprehensive final report<br/>fix: production-fix-agent"]
-        S0 --> S0b --> S0c --> S1 --> S2 --> SD --> SN --> SB --> SF --> SI --> SDOC --> S5
+        S5["Dashboard #17 - Production (readonly audit)<br/>production-standards-agent: audits ALL prior outputs<br/>+ comprehensive final report<br/>fix: production-fix-agent"]
+        SDEP["Dashboard #18-23 - VPS deployment (Minikube + Grafana + Nginx + PM2)<br/>#18 Rajesh platform -> #19 Suresh provision -> #20 Lakshmi DB<br/>-> #21 Manoj backend -> #22 Asha edge -> #23 Om final verify"]
+        S0 --> S0b --> S0c --> S1 --> S2 --> SD --> SN --> SB --> SF --> SI --> SDOC --> S5 --> SDEP
     end
 
     Driver -->|launches each stage in order| pipeline
@@ -123,7 +124,7 @@ Each agent with its key points, grouped by stage. Readonly agents only audit and
 flowchart TB
     subgraph orch [Orchestration and Memory]
         direction LR
-        DRV["Sunny / Driver<br/>• Orchestrates all 18 verify/fix loops<br/>• Matches exact exit phrases<br/>• Enforces quality gates<br/>• Invokes Leela on findings"]
+        DRV["Sunny / Driver<br/>• Orchestrates all 25 verify/fix loops<br/>• Matches exact exit phrases<br/>• Enforces quality gates<br/>• Invokes Leela on findings"]
         CTX["context-agent<br/>• Sole writer of .sunny/context<br/>• Structured summaries + state.json<br/>• Trims handoffs to next agent<br/>• Tracks phase + iteration counters"]
         LEL["issues-log-agent<br/>• Per-project KNOWN_ISSUES.md<br/>• Symptom / cause / fix / prevention"]
     end
@@ -146,7 +147,16 @@ flowchart TB
         ARCV -->|issues| ARCF --> ARCV
     end
 
-    subgraph s12 [Stage 3-4 - Backend build and verify]
+    subgraph sKir [Dashboard #4 - Supabase & Lovable removal]
+        direction LR
+        KIR["supabase-removal-agent<br/>• REST clients per architecture-summary.md<br/>• Delete supabase/ + .lovable/<br/>• JWT-ready auth stubs"]
+        KIRV["supabase-removal-verify-agent - readonly<br/>• Zero Supabase/Lovable in src<br/>• Build passes<br/>• Exit: Supabase removal complete."]
+        KIRF["supabase-removal-fix-agent<br/>• Closes removal findings + Isha leftovers"]
+        KIR --> KIRV
+        KIRV -->|issues| KIRF --> KIRV
+    end
+
+    subgraph s12 [Dashboard #5-6 - Backend build and verify]
         direction LR
         GEN["jhipster-backend-agent<br/>• Microservices: gateway + services + registry<br/>• PostgreSQL + Liquibase<br/>• JWT/OAuth2 + RBAC, Docker<br/>• No mock/fake data"]
         VER["jhipster-verify-agent - readonly<br/>• REST/OpenAPI/RFC7807 audit<br/>• Auth + vulnerability checks<br/>• Microservices + DB integrity<br/>• Exit: No issues found. Backend approved."]
@@ -285,14 +295,54 @@ flowchart TB
         sSw --> sJd --> sAc --> sAt --> sAp
     end
 
-    subgraph s5 [Stage 15 - Production]
+    subgraph s5 [Dashboard #17 - Production]
         direction LR
         PS["production-standards-agent - readonly<br/>• Audits ALL prior stage outputs (do's/don'ts)<br/>• Security + readiness + standards + performance<br/>• Comprehensive final report<br/>• Exit: Final approval granted. System is production-ready."]
         PF["production-fix-agent<br/>• Remediates PR findings<br/>• No control weakening<br/>• Rebuild + run tests<br/>• Returns for re-audit"]
         PS -->|findings| PF --> PS
     end
 
-    orch --> sSan --> sArch --> s12 --> sDb --> sNg --> s3 --> s4 --> sSi --> sDoc --> s5
+    subgraph sDep [Dashboard #18-23 - VPS deployment]
+        direction TB
+        subgraph sRaj [Rajesh - platform]
+            RAJ["deployment-platform-agent<br/>• Minikube + Helm + kube-prometheus-stack<br/>• Grafana + deploy/ scaffold"]
+            RAJV["deployment-platform-verify-agent<br/>Exit: Deployment platform approved."]
+            RAJF["deployment-platform-fix-agent"]
+            RAJ --> RAJV -->|issues| RAJF --> RAJV
+        end
+        subgraph sSur [Suresh - provision]
+            SUR["server-provision-agent<br/>• Host deps via provision.sh"]
+            SURV["server-provision-verify-agent<br/>Exit: Server provisioning approved."]
+            SURF["server-provision-fix-agent"]
+            SUR --> SURV -->|issues| SURF --> SURV
+        end
+        subgraph sLak [Lakshmi - deploy DB]
+            LAK["deployment-database-agent<br/>• Host PostgreSQL + K8s secret"]
+            LAKV["deployment-database-verify-agent<br/>Exit: Deployment database approved."]
+            LAKF["deployment-database-fix-agent"]
+            LAK --> LAKV -->|issues| LAKF --> LAKV
+        end
+        subgraph sMan [Manoj - deploy backend]
+            MAN["deployment-backend-agent<br/>• K8s Deployments/Services/ServiceMonitors"]
+            MANV["deployment-backend-verify-agent<br/>Exit: Deployment backend approved."]
+            MANF["deployment-backend-fix-agent"]
+            MAN --> MANV -->|issues| MANF --> MANV
+        end
+        subgraph sAsh [Asha - deploy edge]
+            ASH["deployment-edge-agent<br/>• Host Nginx TLS + PM2 + /api routing"]
+            ASHV["deployment-edge-verify-agent<br/>Exit: Deployment edge approved."]
+            ASHF["deployment-edge-fix-agent"]
+            ASH --> ASHV -->|issues| ASHF --> ASHV
+        end
+        subgraph sOm [Om - final verify]
+            OM["deployment-verify-agent - readonly<br/>• health-check.sh + port-map + smoke<br/>Exit: Production deployment verified. System is live."]
+            OMF["om-fix-agent"]
+            OM -->|issues| OMF --> OM
+        end
+        sRaj --> sSur --> sLak --> sMan --> sAsh --> sOm
+    end
+
+    orch --> sSan --> sArch --> sKir --> s12 --> sDb --> sNg --> s3 --> s4 --> sSi --> sDoc --> s5 --> sDep
 ```
 
 ---
@@ -623,6 +673,20 @@ flowchart LR
     O -->|"Production deployment verified. System is live."| Live([Live at https://project-domain/])
 ```
 
+### Per-step deployment exit phrases (dashboard #17–#23)
+
+| Dashboard # | Step | Generate | Verify (readonly) | Fix | Counter | Exit phrase |
+|-------------|------|----------|-------------------|-----|---------|-------------|
+| **#17** | Production gate | — | `production-standards-agent` | `production-fix-agent` | `productionVerifyIterations` | `Final approval granted. System is production-ready.` |
+| **#18** | Platform | `deployment-platform-agent` | `deployment-platform-verify-agent` | `deployment-platform-fix-agent` | `deploymentPlatformVerifyIterations` | `Deployment platform approved.` |
+| **#19** | Provision | `server-provision-agent` | `server-provision-verify-agent` | `server-provision-fix-agent` | `serverProvisionVerifyIterations` | `Server provisioning approved.` |
+| **#20** | Database | `deployment-database-agent` | `deployment-database-verify-agent` | `deployment-database-fix-agent` | `deploymentDatabaseVerifyIterations` | `Deployment database approved.` |
+| **#21** | Backend | `deployment-backend-agent` | `deployment-backend-verify-agent` | `deployment-backend-fix-agent` | `deploymentBackendVerifyIterations` | `Deployment backend approved.` |
+| **#22** | Edge | `deployment-edge-agent` | `deployment-edge-verify-agent` | `deployment-edge-fix-agent` | `deploymentEdgeVerifyIterations` | `Deployment edge approved.` |
+| **#23** | Final | — | `deployment-verify-agent` | `om-fix-agent` | `deploymentVerifyIterations` | `Production deployment verified. System is live.` |
+
+Full per-stage handoffs and artifact names: [`context-agent.md`](context-agent.md) dashboard map + deployment handoff matrix.
+
 **Production topology** (deployed by the agents above; full spec in [`deploy/README.md`](../../deploy/README.md)):
 
 ```
@@ -697,7 +761,7 @@ flowchart TD
 10. **Exact phrase only.** Near-miss verdicts (typos, extra words) never advance; the verify agent is asked to re-emit the exact phrase.
 11. **Resume-safe checkpointing.** Maya writes `state.json`/`progress.json` atomically (temp + rename) after every handoff, marking a stage `active` on entry and `done` only on its exit verdict. If the run is interrupted, Sunny's Phase −1 resume check re-enters the `active` stage with counters intact — so a crash/reboot resumes from the last checkpoint instead of restarting, and never loses a cap or an "action required" item.
 
-### Same mechanism across all twenty-four loops
+### Same mechanism across all twenty-five loops
 
 The build pipeline (#1–#17) has 19 loops. The deployment pipeline (#18–#23) adds 6 more. Every loop uses the same generate → verify (readonly) → fix (cap 5) contract.
 

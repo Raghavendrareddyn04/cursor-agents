@@ -20,7 +20,7 @@ secrets, tokens, and `RUN_ID`s.
 
 You never copy or type the push token anywhere. Agents fetch it from `https://<fleet-domain>/api/fleet-config`.
 
-"Build and deploy" is a single Sunny invocation — after the production audit, Sunny automatically runs the **Rajesh → Suresh → Lakshmi → Manoj → Asha → Om** deploy tail (stages #17–#22) and brings the system live on the project domain. See [`deploy/README.md`](deploy/README.md) for the operator runbook.
+"Build and deploy" is a single Sunny invocation — after the production audit (#17), Sunny automatically runs the **Rajesh → Suresh → Lakshmi → Manoj → Asha → Om** deploy tail (dashboard **#18–#23**) and brings the system live on the project domain. See [`deploy/README.md`](deploy/README.md) for the operator runbook.
 
 ---
 

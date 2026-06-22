@@ -300,7 +300,7 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stage 15 — Production (codename family: **Prakash**)
+## Stage 17 — Production (codename family: **Prakash**)
 
 ### Prakash — Production Standards Agent (`production-standards-agent`) · readonly
 - The final gate. **First** runs a completeness audit of every prior stage (a do's-and-don'ts check that each stage emitted its exact verdict and its artifacts exist on disk). **Then** audits security, production readiness, industry standards, performance, and data integrity. **Finally** produces one **comprehensive final report** that consolidates every prior report — including all test coverage, documentation, and API/performance results.
@@ -311,18 +311,18 @@ Same per-layer structure for the frontend: generate once, then **unit → integr
 
 ---
 
-## Stages 16–22 — Production deployment (VPS / Minikube)
+## Stages 18–23 — Production deployment (VPS / Minikube / Docker)
 
-Runs **only after** `Final approval granted. System is production-ready.` Six sub-stages each follow **generate → verify → fix** (cap 5); the final stage is **verify → fix only** (Om). Same pattern as database and nginx.
+Runs **only after** `Final approval granted. System is production-ready.` (dashboard **#17**). Six deploy sub-stages on the VPS follow **generate → verify → fix** (cap 5); the final stage (**#23**, Om) is **verify → fix only**. Rajesh installs **Minikube**, **Helm**, **kube-prometheus-stack**, and **Grafana**; Manoj applies K8s manifests from `deploy/minikube/`; Asha configures host **Nginx** + **PM2**; Om runs `deploy/scripts/health-check.sh`.
 
-| Step | Generate | Verify | Fix | Exit phrase |
-|------|----------|--------|-----|-------------|
-| 16 Platform | Rajesh — `deployment-platform-agent` | Rajesh Verify | Rajesh Fix | `Deployment platform approved.` |
-| 17 Provision | Suresh — `server-provision-agent` | Suresh Verify | Suresh Fix | `Server provisioning approved.` |
-| 18 Database | Lakshmi — `deployment-database-agent` | Lakshmi Verify | Lakshmi Fix | `Deployment database approved.` |
-| 19 Backend | Manoj — `deployment-backend-agent` | Manoj Verify | Manoj Fix | `Deployment backend approved.` |
-| 20 Edge | Asha — `deployment-edge-agent` | Asha Verify | Asha Fix | `Deployment edge approved.` |
-| 21 Final | Om — `deployment-verify-agent` | Om | Om Fix | `Production deployment verified. System is live.` |
+| Dashboard # | Generate | Verify | Fix | Exit phrase |
+|-------------|----------|--------|-----|-------------|
+| 18 Platform | Rajesh — `deployment-platform-agent` | Rajesh Verify | Rajesh Fix | `Deployment platform approved.` |
+| 19 Provision | Suresh — `server-provision-agent` | Suresh Verify | Suresh Fix | `Server provisioning approved.` |
+| 20 Database | Lakshmi — `deployment-database-agent` | Lakshmi Verify | Lakshmi Fix | `Deployment database approved.` |
+| 21 Backend | Manoj — `deployment-backend-agent` | Manoj Verify | Manoj Fix | `Deployment backend approved.` |
+| 22 Edge | Asha — `deployment-edge-agent` | Asha Verify | Asha Fix | `Deployment edge approved.` |
+| 23 Final | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` | `Production deployment verified. System is live.` |
 
 ### Rajesh — Deployment Platform Agent (`deployment-platform-agent`) · not readonly
 - Brings up the production platform: Minikube production profile, kube-prometheus-stack, Grafana + Sunny `progress.json` integration, and the entire `deploy/` scaffold (manifests, dashboards, scripts). Pre-authorized to install host tools; never asks the user for install permission. Targeted fix on failure (no `rm -rf` / `minikube delete` loops).
