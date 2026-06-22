@@ -346,7 +346,7 @@ After the production audit (Prakash, dashboard **#17**) emits `Final approval gr
 | 22 | **Asha** | Host Nginx (TLS via Certbot) + PM2 frontend + `/api` routing | `Deployment edge approved.` |
 | 23 | **Om** | End-to-end audit + `health-check.sh` + port-map match | `Production deployment verified. System is live.` |
 
-**Topology** (see [`deploy/README.md`](deploy/README.md) for the full operator guide):
+**Topology** (see [`deploy/README.md`](deploy/README.md) for the full operator guide; asset map: [`DEPLOY-ASSETS.md`](DEPLOY-ASSETS.md)):
 
 ```
 Internet

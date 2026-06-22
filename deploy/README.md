@@ -27,15 +27,18 @@ Minikube observability namespace
 
 ## Directory layout
 
-| Path | Purpose |
-|------|---------|
-| `minikube/` | K8s Deployments, Services, ConfigMaps, ServiceMonitors, secrets templates |
-| `helm/` | `kube-prometheus-stack-values.yaml` and other Helm values |
-| `grafana/provisioning/` | Datasources + dashboards as code |
-| `nginx/` | Host-level Nginx config (Asha) |
-| `pm2/` | Frontend ecosystem file (Asha) |
-| `scripts/` | `provision.sh`, `sync-secrets.sh`, health-check scripts |
-| `port-map.md` | Authoritative port matrix — Om verifies against this |
+| Path | Status | Purpose |
+|------|--------|---------|
+| `minikube/` | **On disk** | Namespace, resource quota, kustomization, `service-template.yaml` |
+| `minikube/deployment-*.yaml`, `service-*.yaml`, `servicemonitor-*.yaml` | **Created by Manoj (#21)** | Per-microservice manifests copied from `service-template.yaml` |
+| `helm/` | **On disk** | `kube-prometheus-stack-values.yaml` (Grafana + Prometheus) |
+| `grafana/provisioning/` | **On disk** | Datasources + dashboards as code |
+| `nginx/` | **Created by Asha (#22)** | Host-level Nginx site config (TLS, `/api`, `/grafana`) |
+| `pm2/` | **Created by Asha (#22)** | PM2 ecosystem file for the static frontend |
+| `scripts/` | **On disk** | `provision.sh`, `sync-secrets.sh`, `health-check.sh` |
+| `port-map.md` | **On disk** | Authoritative port matrix — Rajesh seeds, Manoj completes, Om verifies |
+
+Before the first Sunny deploy run, `minikube/` may look sparse (only base files) — that is expected. Manoj and Asha add the per-service and edge configs during stages #21–#22.
 
 ## Operator commands
 

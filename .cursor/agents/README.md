@@ -138,6 +138,27 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 
 ---
 
+## Production deployment assets (`deploy/`)
+
+**Minikube, Helm, Grafana, and VPS scripts are not under `.cursor/`** — they live in the repo-root **[`deploy/`](../../deploy/)** folder. Agent files here only describe *who* runs deploy; the YAML/Helm/shell assets are in `deploy/`.
+
+| Path | Purpose |
+|------|---------|
+| [`deploy/README.md`](../../deploy/README.md) | Operator runbook — topology + commands |
+| [`deploy/minikube/`](../../deploy/minikube/) | Namespace, quotas, kustomization, `service-template.yaml` |
+| [`deploy/helm/kube-prometheus-stack-values.yaml`](../../deploy/helm/kube-prometheus-stack-values.yaml) | Grafana + Prometheus (NodePort 30300, Infinity plugin) |
+| [`deploy/grafana/provisioning/`](../../deploy/grafana/provisioning/) | Datasources + Sunny deployment dashboard as code |
+| [`deploy/scripts/`](../../deploy/scripts/) | `provision.sh` (Suresh), `sync-secrets.sh`, `health-check.sh` (Om) |
+| [`deploy/port-map.md`](../../deploy/port-map.md) | Authoritative port matrix |
+
+**Who applies them (dashboard #18–#23):** Rajesh installs Minikube + Helm stack · Suresh runs `provision.sh` · Lakshmi provisions host PostgreSQL · Manoj builds images and `kubectl apply -k deploy/minikube/` · Asha configures host Nginx + PM2 · Om runs `health-check.sh`.
+
+Pre-flight: [`bin/smoke-test-deploy.sh`](../../bin/smoke-test-deploy.sh). Full map: [`DEPLOY-ASSETS.md`](../../DEPLOY-ASSETS.md).
+
+**Note:** There is no production `docker-compose.yml` in this agents repo — Docker is the **Minikube driver**; Compose is generated in the **target app repo** during the build pipeline for local dev/tests.
+
+---
+
 ## How it works
 
 Cursor sub-agents run in **isolation** and are launched via the Task tool. Because an isolated sub-agent has no memory of previous runs, all state lives in a **file-based context store** owned by the Context Agent. The main chat agent acts as the orchestration driver, following the playbook in `../rules/sunny-orchestrator.mdc`.
