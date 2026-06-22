@@ -10,7 +10,7 @@ Accurate status after reconciling `.cursor/` with `reference-new/`. Use this fil
 
 | Layer | Status |
 |-------|--------|
-| Orchestration contract (Maya + Sunny + Bunny playbooks) | Aligned — 23 stages, deploy phases, unified counters |
+| Orchestration contract (Maya + Sunny playbook) | Aligned — 23 stages, deploy phases, unified counters; `@bunny` = Sunny deploy-only |
 | Architecture diagrams + README + AGENT-GUIDE | Updated — Minikube deploy tail #18–#23, production #17 |
 | Deployment agent files + `deploy/` assets | On disk; current `deploy/` is a superset of `reference-new/` |
 | End-to-end VPS run | **Not auto-verified here** — run `bin/smoke-test-deploy.sh` + one Sunny deploy on your VPS |
@@ -35,7 +35,7 @@ All items below were **blocking** before remediation; each is now closed with ev
 | Item | Target | Status |
 |------|--------|--------|
 | Dashboard stage count | 23 | `progress.json` writer uses `counts.total: 23` in `context-agent.md` |
-| Bunny scope | #17–#23 | `bunny.md`, `bunny-orchestrator.mdc` |
+| Deploy-only alias | #17–#23 | `bunny.md` → `sunny-orchestrator.mdc` Deploy-only entry |
 | Om fix agent slug | `om-fix-agent` | No `deployment-fix-agent` in `.cursor/` (excl. `reference-new/`) |
 | Om fix log artifact | `deployment-fix-log.md` | `sunny-orchestrator.mdc` Phase 5.6 |
 | Final deploy counter | `deploymentVerifyIterations` | No `deploymentFinalVerifyIterations` in `.cursor/` |
@@ -85,7 +85,7 @@ rg "\(/23\)" .cursor/rules/sunny-orchestrator.mdc           # expect 1
 ### Manual smoke (operator)
 
 1. `@sunny` intake on a test project — confirm `progress.json` has `counts.total: 23` and stage keys include `frontend_sanitize`, `supabase_removal`, `deployment_platform`.
-2. `@bunny` with missing #1–#16 — confirm warning; with #17 `done` — confirm Rajesh launches at #18.
+2. `@bunny` with missing #1–#16 — confirm warning; with #17 `done` — confirm Rajesh launches at #18 (via Sunny deploy-only, not a separate orchestrator).
 3. Open `.cursor/dashboard/agentprogress.html` with empty `counts` — bar should not assume 16 stages.
 
 ---
@@ -103,6 +103,6 @@ Remove this file when:
 ## What we did NOT change
 
 - Did not merge Isha + Kiran into one agent (different pipeline timing)
-- Did not remove Bunny, Leela, or Sunny extras
+- Did not remove `@bunny` alias, Leela, or Sunny extras
 - Did not overwrite project-specific `deploy/` extras (`jarvis`, `hermes`, `service-template.yaml`)
 - Did not edit the remediation plan file or commit/push

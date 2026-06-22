@@ -43,6 +43,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 - **Auth design**: JWT or OAuth2/OIDC (JHipster gateway) — **never Supabase**. Roles/authorities, protected routes.
 - **Cross-cutting needs**: file upload, websockets, search, caching, messaging — only if justified by the frontend.
 - **Tech choices** with rationale (build tool, DB per service vs shared schema ownership, etc.).
+- **Deploy scaffold (draft):** service list → **distinct ports** → draft [`deploy/port-map.md`](../../deploy/port-map.md) rows (gateway NodePort, internal service ports). Reference [`deploy/minikube/service-template.yaml`](../../deploy/minikube/service-template.yaml) so Vikram can emit per-service manifests during backend generation.
 
 ### 2. Project boilerplate / scaffolding
 
@@ -68,6 +69,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 - [ ] PostgreSQL per service (or documented shared-schema ownership)
 - [ ] Draft JDL is consistent and buildable by JHipster
 - [ ] Boilerplate/folder structure defined for every app
+- [ ] Draft `deploy/port-map.md` rows and manifest plan reference `deploy/minikube/service-template.yaml`
 - [ ] No mock/fake data anywhere in the design
 
 ## Output for Context Agent
@@ -95,6 +97,10 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 
 ### Boilerplate / scaffolding
 - Folder structure per app, base config skeletons, conventions
+
+### Deploy scaffold (for Vikram / Manoj)
+- Draft `deploy/port-map.md` rows: service → container port → NodePort (gateway public)
+- Per-service manifest plan from `deploy/minikube/service-template.yaml`
 
 ### Handoff to JHipster Backend Agent
 - Exactly what to generate and customize

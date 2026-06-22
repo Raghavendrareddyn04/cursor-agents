@@ -9,8 +9,8 @@ One-page guide to **where** production infrastructure lives and **what gets crea
 | Layer | Location | When it exists |
 |-------|----------|----------------|
 | **Agents repo (this repo)** | [`deploy/`](deploy/) | Committed — Helm values, Grafana provisioning, Minikube base, scripts |
-| **Target app repo** | `docker-compose.yml` at project root | Created by Vikram (JHipster) during build — **local dev & CI tests only** |
-| **VPS at runtime** | Minikube cluster + host Nginx/PM2/PostgreSQL | Created by Rajesh→Om (dashboard #18–#23) on first deploy |
+| **Target app repo** | `docker-compose.yml` at project root | Created by Vikram (JHipster) — **Compose fallback** when Minikube dev cluster is down |
+| **VPS at runtime** | Minikube cluster + host Nginx/PM2/PostgreSQL | **One deploy** at #18–#23; redeploy = idempotent `helm`/`kubectl` (same Sunny playbook) |
 
 ```mermaid
 flowchart LR
@@ -31,7 +31,7 @@ flowchart LR
   CursorAgents -.instructions.-> DeployFolder
   DeployFolder --> vps
   Backend --> Compose
-  Compose -.dev/tests only.-> Backend
+  Compose -.fallback when Minikube down.-> Backend
 ```
 
 ---
@@ -56,14 +56,18 @@ flowchart LR
 
 ---
 
-## What agents create at deploy time
+## What agents create when
 
-| Missing until deploy | Agent | Dashboard # |
-|---------------------|-------|-------------|
-| `deploy/minikube/deployment-*.yaml`, `service-*.yaml`, `servicemonitor-*.yaml` | Manoj | #21 |
+| Artifact | Created / updated by | Dashboard # |
+|----------|----------------------|-------------|
+| Draft `deploy/port-map.md` rows | Arjun (architecture) | #3 |
+| `deploy/minikube/deployment-*.yaml`, `service-*.yaml`, `servicemonitor-*.yaml` | **Vikram** (scaffold); **Manoj** (apply/update on VPS) | #5–#6, #21 |
+| `deploy/minikube/namespace.yaml`, Helm values, Grafana provisioning | Rajesh (reconcile repo `deploy/`) | #18 |
 | `deploy/nginx/`, `deploy/pm2/` | Asha | #22 |
 | Running Minikube cluster, Helm release, live pods | Rajesh + Manoj | #18, #21 |
 | Host PostgreSQL databases + roles | Lakshmi | #20 |
+
+**Redeploy:** same agents + `helm upgrade --install` + `kubectl apply -k` — not a second pipeline. Invoke **`@bunny`** / **`Sunny deploy`** (Sunny deploy-only mode).
 
 ---
 
@@ -72,7 +76,7 @@ flowchart LR
 | Technology | Role in Sunny production |
 |------------|-------------------------|
 | **Docker** | Installed on VPS; used as **Minikube's container driver** (`minikube start --driver=docker`). Manoj runs `eval $(minikube docker-env)` to build images into Minikube's Docker daemon. |
-| **Docker Compose** | **Not** the production orchestrator. JHipster generates `docker-compose.yml` in the **app repo** for local stack (Postgres + services + gateway) during build/test stages. |
+| **Docker Compose** | **Fallback** when Minikube dev cluster is unavailable. JHipster still generates `docker-compose.yml` in the **app repo**; Sunny agents prefer Minikube + `kubectl` for build/test when the cluster is up. |
 | **Minikube** | Runs gateway + microservices + registry as Kubernetes pods in namespace `sunny-prod`. |
 | **Helm (`kube-prometheus-stack`)** | Installs **Prometheus + Grafana** in namespace `observability`. Values: [`deploy/helm/kube-prometheus-stack-values.yaml`](deploy/helm/kube-prometheus-stack-values.yaml). |
 | **Grafana** | Provisioned from [`deploy/grafana/provisioning/`](deploy/grafana/provisioning/); Sunny progress panel reads `https://<domain>/progress.json` via Infinity datasource. |
@@ -101,4 +105,4 @@ ls deploy/minikube deploy/helm deploy/grafana/provisioning deploy/scripts
 rg "deploy/" .cursor/agents/deployment-platform-agent.md
 ```
 
-Orchestration docs: [`.cursor/agents/README.md`](.cursor/agents/README.md#production-deployment-assets-deploy) · [`ARCHITECTURE.md`](.cursor/agents/ARCHITECTURE.md) §6.5
+Orchestration docs: [`.cursor/agents/README.md`](.cursor/agents/README.md#production-deployment-assets-deploy) · [`ARCHITECTURE.md`](.cursor/agents/ARCHITECTURE.md) §0.1 · §6.5 · §6.6

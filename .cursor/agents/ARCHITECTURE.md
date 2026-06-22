@@ -8,6 +8,45 @@ Visual reference for the Sunny multi-agent system: component architecture, contr
 
 ## 0. System at a glance
 
+### Document map
+
+| Topic | Section |
+|-------|---------|
+| **Container runtime & `deploy/` assets** | [§0.1](#01-container-runtime--deploy-assets) |
+| Pipeline order & loops | §0 tables · [§1](#1-system-architecture-pipeline-order) |
+| Production deploy tail (Rajesh→Om) | [§6.5](#65-production-deployment-tail-stages-1823) |
+| Redeployment / idempotency | [§6.6](#66-redeployment--idempotency) |
+| `state.json` phase machine | [§10](#10-workflow-state-machine) |
+| Operator runbook | [`deploy/README.md`](../../deploy/README.md) · [`DEPLOY-ASSETS.md`](../../DEPLOY-ASSETS.md) |
+
+## 0.1 Container runtime & deploy assets
+
+**Orchestration** (who runs when) lives in `.cursor/agents/` and [`sunny-orchestrator.mdc`](../rules/sunny-orchestrator.mdc). **Infrastructure as code** (Minikube, Helm, Grafana) lives in repo-root [`deploy/`](../../deploy/).
+
+```mermaid
+flowchart TB
+    Internet --> Nginx["Host Nginx TLS + PM2"]
+    Nginx -->|"https://domain/api"| MK["Minikube NodePort gateway"]
+    Nginx -->|"/grafana"| Graf["Grafana NodePort 30300"]
+    MK --> Pods["sunny-prod pods: gateway + microservices + registry"]
+    Pods --> PG["Host PostgreSQL host.min.internal:5432"]
+    subgraph obs [observability namespace]
+        Prom[Prometheus]
+        Graf
+    end
+    Prom --> Pods
+```
+
+| Path | Role |
+|------|------|
+| [`deploy/minikube/`](../../deploy/minikube/) | Namespace, quotas, Kustomize base, per-service manifests (Vikram scaffolds; Manoj applies) |
+| [`deploy/helm/kube-prometheus-stack-values.yaml`](../../deploy/helm/kube-prometheus-stack-values.yaml) | Grafana + Prometheus (Helm) |
+| [`deploy/grafana/provisioning/`](../../deploy/grafana/provisioning/) | Datasources + Sunny deployment dashboard |
+| [`deploy/scripts/`](../../deploy/scripts/) | `provision.sh`, `sync-secrets.sh`, `health-check.sh` |
+| [`deploy/port-map.md`](../../deploy/port-map.md) | Authoritative port matrix |
+
+**Runtime model:** **Docker** builds images (`eval $(minikube docker-env)`). **Minikube** runs gateway + microservices. **One production/UAT deploy** at dashboard **#18–#23** (after Prakash #17). Redeploy is idempotent — see [§6.6](#66-redeployment--idempotency). **`@bunny`** is a Sunny alias for deploy-only resume (#17–#23), not a second orchestrator.
+
 **75 orchestrated agents** (plus 2 standalone agents: `documentation` and `fleet-host-agent`), driven through **25 bounded verify/fix loops**.
 
 | Group | Count | Agents |
@@ -40,8 +79,9 @@ Visual reference for the Sunny multi-agent system: component architecture, contr
 - **Live progress dashboard:** web-visible from the first agent — early via a static publisher (`http://<server-ip>:8787/agentprogress.html`), then on the domain (`https://<domain>/agentprogress.html`). Maya rewrites `.sunny/web/progress.json` every handoff; read-only, never touches the generated backend. "Action required" asks (e.g. an external key) surface here without halting the run.
 - **Fleet / global dashboard:** every VPS uses the **same** `.cursor/` agents but runs **independently** (own project, domain, `.env`, `RUN_ID`). Each optionally **pushes** progress to a central collector (`.cursor/central/`, deployed once), so all runs show on one global board at `https://<central-domain>/` — one card per run, best-effort, never blocking.
 - **Non-blocking by default:** loops still have a hard iteration cap, but when a loop gives up or an external value is missing, it becomes a `needs-attention`/`actionRequired` **notification** and the pipeline continues; only a hard technical dependency causes a real stop.
-- **Resumable by default:** all state lives on disk (`state.json` + context summaries + `.env` + generated code), checkpointed atomically after every handoff. On (re)invocation Sunny runs a **resume check** (Phase −1): if a prior run is incomplete it skips done stages, re-enters the interrupted one, and continues with counters intact. Every agent is idempotent (patches, never duplicates), so re-running a stage is safe; Docker services auto-restart (`restart: unless-stopped`).
-- **Service lifecycle:** the stack runs via Docker Compose; code/config-changing agents rebuild + restart the affected services (`docker compose up -d --build <service>`), Nginx uses graceful reload, and testing stages run against a fresh, healthy stack. The dashboard survives every restart (decoupled static mount + separate publisher).
+- **Resumable by default:** all state lives on disk (`state.json` + context summaries + `.env` + generated code), checkpointed atomically after every handoff. On (re)invocation Sunny runs a **resume check** (Phase −1): if a prior run is incomplete it skips done stages, re-enters the interrupted one, and continues with counters intact. Every agent is idempotent (patches, never duplicates), so re-running a stage is safe.
+- **Service lifecycle — build/test (#5–#16):** prefer **Minikube + kubectl** when a dev cluster is up (`minikube start --driver=docker` after backend gen); images via `eval $(minikube docker-env)`; restarts via `kubectl rollout restart`. **Docker Compose** (JHipster-generated in the app repo) is **fallback only** when Minikube is unavailable.
+- **Service lifecycle — production (#18–#23):** **Minikube + Helm + host Nginx/PM2/PostgreSQL** on the VPS; idempotent `helm upgrade --install` + `kubectl apply -k deploy/minikube/`. The progress dashboard survives every restart (decoupled static mount + separate publisher).
 - **Production agent** audits every prior stage's completeness (do's and don'ts) and emits one comprehensive final report.
 - **Every loop:** independent exit phrase + iteration counter, capped at **5** — then `needs-attention` notifications and continue by default (hard stop only on a technical dependency).
 - **One writer of shared memory:** `context-agent` owns `.sunny/context/` and `.sunny/web/`.
@@ -725,6 +765,19 @@ Minikube observability namespace
 - `deploy/grafana/provisioning/datasources/datasources.yaml` — Prometheus + Sunny progress.json.
 - `deploy/scripts/{provision.sh, sync-secrets.sh, health-check.sh}` — Suresh's installer, Lakshmi/Manoj's K8s-secret writer, Om's verifier.
 
+## 6.6 Redeployment & idempotency
+
+Production/UAT is deployed **once** per Sunny run (stages #18–#23). **Re-running** deploy agents or invoking **`Sunny deploy`** / **`@bunny`** (Sunny deploy-only mode) must **reconcile**, not duplicate:
+
+| Agent | Idempotent action |
+|-------|---------------------|
+| **Rajesh** | `helm upgrade --install kube-prometheus-stack …`; `minikube start` if stopped; skip if cluster + release healthy |
+| **Manoj** | `eval $(minikube docker-env)` → rebuild images → `kubectl apply -k deploy/minikube/` → `kubectl rollout restart` as needed |
+| **Asha** | Nginx `nginx -t && nginx -s reload`; `pm2 reload` frontend |
+| **Om** | `./deploy/scripts/health-check.sh` until green |
+
+**State:** same `state.json` counters (`deploymentPlatformVerifyIterations`, … `deploymentVerifyIterations`). Sunny **Phase −1** resume re-enters the `active` deploy stage with counters intact. Manifests scaffolded during build (#5–#6) are **updated**, not recreated from scratch.
+
 ---
 
 ## 7. What happens when something fails (fix and re-verify)
@@ -1089,6 +1142,12 @@ flowchart LR
         DOCFL["...-fix-log.md (x5)"]
         PR[production-report.md]
         PFL[production-fix-log.md]
+        DPLAT[deployment-platform-summary.md + verify/fix logs]
+        DPROV[server-provision-summary.md + verify/fix logs]
+        DDB[deployment-database-summary.md + verify/fix logs]
+        DBE[deployment-backend-summary.md + verify/fix logs]
+        DED[deployment-edge-summary.md + verify/fix logs]
+        DFIN[deployment-verify-report.md + deployment-fix-log.md]
         ST[state.json]
     end
 
@@ -1105,7 +1164,7 @@ flowchart LR
     Ctx[context-agent] -->|writes| store
     Ctx -->|"writes every handoff"| web
     Ctx -->|"generates at intake (no values logged)"| ENV
-    ENV -->|"$VAR consumed by"| Stack["backend / nginx / tests<br/>(docker compose)"]
+    ENV -->|"$VAR consumed by"| Stack["Minikube pods + host Postgres<br/>(compose fallback in dev)"]
     PJSON -->|"early publisher / Naveen on domain"| Viewer["Browser<br/>agentprogress.html"]
 
     PC --> ARC[architecture-agent]
@@ -1190,6 +1249,20 @@ flowchart LR
     BS --> PFIX
     PC --> PFIX
     PFL --> PFIX
+    PR --> RAJESH[deployment-platform-agent]
+    DPLAT --> RAJESH
+    RAJESH --> SURESH[server-provision-agent]
+    DPROV --> SURESH
+    SURESH --> LAKSHMI[deployment-database-agent]
+    DDB --> LAKSHMI
+    LAKSHMI --> MANOJ[deployment-backend-agent]
+    DBE --> MANOJ
+    BS --> MANOJ
+    MANOJ --> ASHA[deployment-edge-agent]
+    DED --> ASHA
+    ASHA --> OM[deployment-verify-agent]
+    DFIN --> OM
+    OM --> OMFIX[om-fix-agent]
     ST -.drives loop decisions.-> Driver[Sunny driver]
 ```
 

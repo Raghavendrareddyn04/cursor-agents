@@ -40,6 +40,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 - Validate against the **OpenAPI spec** when present (contract tests catch drift).
 - Deterministic, CI-friendly: isolated test data via Testcontainers; real JWT/auth tokens for protected routes.
 - Test microservices directly for bounded-context isolation, and through the **gateway** for end-to-end journeys.
+- **Stack preference:** when Minikube is running, target the gateway via **NodePort** or public `https://<domain>/api` (from `deploy/port-map.md` / Nginx). Use in-process `MockMvc`/`WebTestClient` for slice tests. Compose/direct port only when Minikube is down.
 
 ## Required workflow
 

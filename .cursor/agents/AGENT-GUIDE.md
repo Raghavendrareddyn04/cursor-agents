@@ -88,7 +88,7 @@ Optional: Certbot email (else `admin@<project-domain>`). **Never** passwords, to
   - From the Nginx stage on: `https://<domain>/agentprogress.html` over HTTPS (publisher retired).
   - Global/fleet: `https://<central-domain>/` (all runs, if the collector is deployed).
   - It is a read-only artifact in `.sunny/web/`; it never modifies the generated backend.
-- **Service restarts:** the system runs as a Docker Compose stack. Code/config-changing agents rebuild + restart the affected services (`docker compose up -d --build <service>`) so changes take effect; the frontend is rebuilt when its API base URL moves to the domain (`/api`); Nginx uses a graceful reload; and the testing stages run against a freshly (re)started, healthy stack. The dashboard survives every restart (separate publisher + static mount + Nginx graceful reload).
+- **Service restarts:** prefer **Minikube + kubectl** when a dev cluster is up (`kubectl rollout restart` after image rebuild). **Docker Compose** is fallback when Minikube is unavailable. Nginx uses graceful reload; testing stages run against a healthy stack. Dashboard survives restarts (separate publisher + static mount).
 
 ---
 

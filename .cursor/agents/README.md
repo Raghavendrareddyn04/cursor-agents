@@ -134,7 +134,7 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 | Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
 | Om (deploy verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
 
-**Singletons:** Sunny — `sunny` (the only full orchestrator — covers all 23 stages end-to-end: build #1–#16 + production #17 + deploy #18–#23) · **Bunny** — `bunny` (deployment-only orchestrator, dashboard #17–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only orchestrator — all 23 stages; `@bunny` is a deploy-only Sunny shortcut for #17–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 ---
 
@@ -152,6 +152,8 @@ Every agent has a human codename. A family shares a base name and its verify/fix
 | [`deploy/port-map.md`](../../deploy/port-map.md) | Authoritative port matrix |
 
 **Who applies them (dashboard #18–#23):** Rajesh installs Minikube + Helm stack · Suresh runs `provision.sh` · Lakshmi provisions host PostgreSQL · Manoj builds images and `kubectl apply -k deploy/minikube/` · Asha configures host Nginx + PM2 · Om runs `health-check.sh`.
+
+**Build-time scaffold:** Arjun drafts `deploy/port-map.md` rows; **Vikram** emits `deploy/minikube/deployment-*.yaml` during backend gen (#5–#6). VPS deploy is **idempotent apply/update**, not greenfield creation. **`@bunny`** = Sunny deploy-only shortcut (#17–#23).
 
 Pre-flight: [`bin/smoke-test-deploy.sh`](../../bin/smoke-test-deploy.sh). Full map: [`DEPLOY-ASSETS.md`](../../DEPLOY-ASSETS.md).
 
@@ -759,7 +761,7 @@ The user gives a **domain + Certbot email** at intake (single host: `/` → fron
 
 4. **Watch progress** via the live dashboard (above) and `.sunny/context/` reports.
 
-5. **Push/pull via GitHub:** commit source + `.cursor/`; never commit `.env`, `.sunny/`, `node_modules/`, `target/`, or certs. On VPS after `git pull`, rebuild/restart changed services (`docker compose up -d --build`).
+5. **Push/pull via GitHub:** commit source + `.cursor/`; never commit `.env`, `.sunny/`, `node_modules/`, `target/`, or certs. On VPS after `git pull`, prefer Minikube rollout restart after image rebuild; Compose fallback: `docker compose up -d --build`.
 
 6. **On completion**, Sunny delivers a summary: architecture, services, coverage, security posture, and a run guide. Outstanding `needs-attention` items are listed; the run does not halt on them by default.
 

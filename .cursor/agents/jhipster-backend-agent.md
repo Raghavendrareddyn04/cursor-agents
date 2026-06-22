@@ -95,6 +95,16 @@ Define entities, fields, validations, enums, relationships, `paginate`, `service
 - Implement business logic, custom endpoints, mappers, queries beyond generated CRUD.
 - Match the frontend's **exact** API contracts.
 
+### 4b. Scaffold Minikube manifests (`deploy/minikube/`)
+
+After generation, emit per-service Kubernetes manifests under repo-root **`deploy/minikube/`** (idempotent — patch existing, never duplicate):
+
+- `deployment-{svc}.yaml`, `service-{svc}.yaml`, `servicemonitor-{svc}.yaml` from [`deploy/minikube/service-template.yaml`](../../deploy/minikube/service-template.yaml)
+- Add resources to `deploy/minikube/kustomization.yaml`
+- Update **`deploy/port-map.md`** with distinct ports / NodePorts from the architecture blueprint
+
+Rajesh (#18) and Manoj (#21) **reconcile** these files on the VPS — they do not recreate from scratch if Vikram already scaffolded them.
+
 ### 5. Wire security and gateway
 
 - JWT or OAuth2/OIDC (Keycloak default for OAuth2).
@@ -121,7 +131,7 @@ Define entities, fields, validations, enums, relationships, `paginate`, `service
 | **Observability** | Actuator, Micrometer + Prometheus, structured JSON logging, distributed tracing hooks |
 | **Config** | `application-prod.yml`, config server, 12-factor env vars, no hardcoded secrets |
 | **Performance** | DTOs, caching where appropriate |
-| **Deployment** | Multi-stage Dockerfiles per service, `docker-compose.yml` with PostgreSQL, K8s manifests or `jhipster kubernetes` |
+| **Deployment** | Multi-stage Dockerfiles per service; **`deploy/minikube/`** manifests from [`deploy/minikube/service-template.yaml`](../../deploy/minikube/service-template.yaml); JHipster `docker-compose.yml` as **dev fallback only** |
 | **CI/CD** | GitHub Actions (or project standard) building, testing, producing images |
 
 ## Data integrity rules
@@ -156,12 +166,12 @@ Return a structured summary (do not write files in `.sunny/context/` yourself):
 - Endpoint inventory matching frontend
 
 ### Run guide
-1. Prerequisites (JDK, Node, JHipster CLI version)
-2. Start registry
-3. Start microservices
-4. Start gateway
-5. Point frontend at gateway URL
-6. **Build + start (and restart after changes):** `docker compose up -d --build` to (re)build and launch the stack (Compose auto-loads the root `.env` for secrets/config); wait for health checks before testing. After later code/config edits, rebuild + restart only the affected service (`docker compose up -d --build <service>`).
+1. Prerequisites (JDK, Node, JHipster CLI version, **minikube + kubectl** on PATH)
+2. **Primary (Minikube):** `minikube start --driver=docker` (if not running) → `eval $(minikube docker-env)` → build images → `kubectl apply -k deploy/minikube/` → wait for rollout / health
+3. Start registry → microservices → gateway (order per JHipster docs if not yet in cluster)
+4. Point frontend at gateway URL (NodePort or Nginx `/api` when edge is up)
+5. **Restart after code changes (Minikube preferred):** `eval $(minikube docker-env)` → rebuild affected image → `kubectl rollout restart deployment/<svc> -n sunny-prod`
+6. **Fallback (Compose only when Minikube unavailable):** `docker compose up -d --build` (JHipster-generated; loads root `.env`); restart with `docker compose up -d --build <service>`
 
 ### Assumptions & defaults
 - {list}

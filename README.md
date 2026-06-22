@@ -2,7 +2,7 @@
 
 A collection of **Cursor AI agents** that turn a frontend application into a complete, enterprise-grade **JHipster microservices** backend — fully generated, verified, tested to 95%+ coverage, audited for production readiness, and **deployed live on a VPS** (Minikube + Grafana + Nginx + PM2 + PostgreSQL) through **23 dashboard stages**.
 
-At the center is **Sunny**, the full-pipeline orchestrator (#1–#23). **Bunny** (`@bunny`) is an optional shortcut for deploy-only runs (#17–#23). **Isha** strips Supabase/Lovable before architecture; **Kiran** wires REST clients after architecture. **Leela** logs per-project issues to `.sunny/KNOWN_ISSUES.md`. Agents use **Graphify** (`graphify update`) for token-efficient codebase context. A standalone **documentation** agent (Swagger + Postman + Javadoc) is also included.
+At the center is **Sunny**, the full-pipeline orchestrator (#1–#23). **`@bunny`** is a Sunny alias for deploy-only runs (#17–#23) — not a second orchestrator. **Isha** strips Supabase/Lovable before architecture; **Kiran** wires REST clients after architecture. **Leela** logs per-project issues to `.sunny/KNOWN_ISSUES.md`. Agents use **Graphify** (`graphify update`) for token-efficient codebase context. A standalone **documentation** agent (Swagger + Postman + Javadoc) is also included.
 
 ---
 
@@ -15,7 +15,7 @@ bin/                                # Bootstrap scripts (start-sunny.sh, smoke-t
 .cursor/
 ├── rules/
 │   ├── sunny-orchestrator.mdc      # Executable playbook — full pipeline #1–#23
-│   ├── bunny-orchestrator.mdc      # Deploy-only playbook — stages #17–#23
+│   ├── bunny-orchestrator.mdc      # Deprecated — use sunny-orchestrator.mdc Deploy-only entry
 │   └── graphify.mdc                # Query-first context via graphify-out/ (token savings)
 ├── dashboard/                      # Live progress dashboard bundle (copied to .sunny/web/ at intake)
 │   ├── agentprogress.html
@@ -334,7 +334,7 @@ The whole system runs as a Docker Compose stack (PostgreSQL + registry + gateway
 
 ## Production deployment (VPS / Minikube)
 
-After the production audit (Prakash, dashboard **#17**) emits `Final approval granted. System is production-ready.`, Sunny continues into the **production deployment tail** — six sub-stages (#18–#23) that bring the system live on the VPS with **Minikube**, **Grafana**, host **Nginx**, **PM2**, and **PostgreSQL**. Each sub-stage follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage. **`@bunny`** can run stages #17–#23 alone when the build pipeline is already complete.
+After the production audit (Prakash, dashboard **#17**) emits `Final approval granted. System is production-ready.`, Sunny continues into the **production deployment tail** — six sub-stages (#18–#23) that bring the system live on the VPS with **Minikube**, **Grafana**, host **Nginx**, **PM2**, and **PostgreSQL**. Each sub-stage follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage. **`@bunny`** / **`Sunny deploy`** run stages #17–#23 through the same Sunny playbook when the build pipeline is already complete.
 
 | # | Codename | What it does | Exit phrase |
 |---|----------|--------------|-------------|

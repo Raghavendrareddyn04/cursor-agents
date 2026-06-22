@@ -7,6 +7,30 @@ alwaysApply: false
 
 When the user invokes **Sunny** (e.g. "Sunny, build the backend for this frontend"), you act as the **Sunny Orchestrator**. Coordinate specialized subagents via the Task tool. Never assume cross-agent memory — all state lives in `.sunny/context/` managed by `context-agent`.
 
+## Deploy-only entry (`@bunny`)
+
+**There is no separate deploy orchestrator.** `@bunny`, `/bunny`, **"Sunny deploy"**, **"Sunny, resume deployment"**, and **"Bunny, deploy"** are all **Sunny in deploy-only mode** — same playbook (`sunny-orchestrator.mdc`), same Task slugs, same Maya checkpoints. Only the **starting phase** changes.
+
+| Trigger | Behavior |
+|---------|----------|
+| `@bunny` / `/bunny` / `Sunny deploy` | Set **deploy-only mode**; run Phase −2 self-test, then **deploy-only Phase −1**, then **Phase 4 (#17)** or resume mid-deploy |
+| `Sunny, resume` (default) | Full pipeline resume from first non-`done` stage (#1–#23) |
+| `Sunny, resume deployment` / `Bunny, resume` | Deploy-only resume (#17–#23) |
+
+**Deploy-only Phase −1:**
+
+1. No `state.json` → warn stages #1–#16 may be missing; ask to run Sunny first or confirm override → start at **Phase 4 (#17)**.
+2. `phase: complete` → report live URLs; stop unless user requests redeploy.
+3. Else **RESUME** from first non-`done` stage in keys: `production`, `deployment_platform`, `deployment_provision`, `deployment_database`, `deployment_backend`, `deployment_edge`, `deployment_verify`.
+4. Announce: **`Sunny deployment resume: {stage label}, iteration {n}.`**
+5. Skip intake and build phases (#1–#16); jump directly to the matching **Phase 4** or **Phase 5.x** loop.
+
+**Preflight (deploy-only):** read `state.json`, `production-report.md` (if any), `project-context.md`. If dashboard #1–#16 are not all `done`, list gaps and require explicit user OK before #17.
+
+**Single codename invoke** (e.g. `/rajesh`): run **that agent only** + **maya** — do **not** advance the full pipeline unless the user asked for full deploy. Report: `Ran Rajesh only. Say "Sunny deploy" or "@bunny" for full #17–#23 orchestration.`
+
+Codename files (`rajesh.md`, etc.) are for **`@rajesh` chat invocation** only. Task `subagent_type` must always use canonical slugs (`deployment-platform-agent`, not `rajesh`).
+
 ## Non-negotiables
 
 ### Build side
@@ -124,27 +148,46 @@ Each VPS runs **independently** with the **same** `.cursor/` agent definitions. 
 
 ## Service lifecycle & restarts
 
-The system runs as a Docker Compose stack (PostgreSQL + JHipster **registry + gateway + microservices** + **frontend** + **Nginx**). Code/config changes only take effect when the affected services are rebuilt and restarted, so every stage that changes runtime artifacts must refresh the stack before the next verify/test stage relies on it.
+**Primary runtime (build/test #5–#16):** **Minikube + kubectl** when a dev cluster is up. **Docker Compose** (JHipster-generated in the app repo) is **fallback only** when Minikube is unavailable.
 
-- **Rebuild + restart only what changed** (avoid full-stack churn):
+When Minikube is running (`minikube status` → Running):
+
+- **Build images:** `eval $(minikube docker-env)` then Docker build per service (same images as production path).
+- **Apply / update:** `kubectl apply -k deploy/minikube/`
+- **Restart after code/config changes:** `kubectl rollout restart deployment/<name> -n sunny-prod` (rebuild image first when code changed).
+- **Health gate:** wait for `kubectl rollout status` and `/management/health` before verify/test stages.
+
+**Optional Phase 2.45 — Dev Minikube bootstrap** (after Phase 2 backend verification exit phrase, before Phase 2.5 database):
+
+```
+if minikube not Running:
+  minikube start --driver=docker --cpus=4 --memory=8192   # dev profile; skip if operator forbids
+eval $(minikube docker-env)
+kubectl apply -k deploy/minikube/   # Vikram-scaffolded manifests
+```
+
+Skip Phase 2.45 if Minikube cannot start — fall back to Compose for that run and note in Maya summary.
+
+**Compose fallback** (Minikube unavailable):
+
+- Rebuild + restart only what changed:
   ```bash
   docker compose up -d --build <service>     # e.g. gateway, order-service, frontend
   docker compose restart <service>            # config-only change, no rebuild
   ```
-- **Backend / database changes** (`jhipster-backend-agent`, `issue-resolution-agent`, `database-agent`, `database-fix-agent`): after edits, rebuild + restart the affected services and re-apply Liquibase migrations so the next verify/test sees the real, current state.
-- **Frontend changes / new API base URL:** rebuild + restart the frontend so it calls the API through the domain (`/api`). Naveen's stage is when the frontend is pointed at the public domain.
-- **Nginx changes:** prefer a **graceful reload** (zero downtime) over a restart:
+- **Backend / database changes** (`jhipster-backend-agent`, `issue-resolution-agent`, `database-agent`, `database-fix-agent`): after edits, rebuild + restart affected services and re-apply Liquibase migrations.
+- **Testing stages** before system integration (3C), API tests (3G), and API performance (3H): ensure stack is healthy — prefer Minikube rollout status; Compose: `docker compose down && docker compose up -d --build` only if state is dirty.
+
+**Nginx changes (Naveen):** prefer graceful reload on host or container:
   ```bash
-  docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
-  # or, if the service/compose definition changed:
-  docker compose up -d nginx
+  nginx -t && nginx -s reload
+  # or docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
   ```
-- **Testing stages run against a fresh, healthy stack.** Before system integration (3C), API tests (3G), and API performance (3H), ensure the full stack is (re)started and **healthy** (wait for health checks / readiness) so results reflect current code. Tear down and recreate if state is dirty (`docker compose down && docker compose up -d --build`).
-- **The dashboard survives every restart.** `.sunny/web` is a static, read-only mount and the progress feed is decoupled from the app:
-  - The **early publisher** is a separate container — restarting frontend/backend never affects it.
-  - Once Naveen owns the edge, an Nginx **reload** keeps serving `agentprogress.html` + `progress.json` with no downtime.
-  - Maya keeps rewriting `progress.json` regardless of stack state, so progress stays visible even while services are restarting (the page shows the live clock and last-known stages).
-- After any restart that changed code, the responsible code-changing agent still runs `graphify update <project-root>` (unchanged from the Graphify policy).
+
+**Production (#18–#23):** Rajesh/Manoj use Minikube + Helm — idempotent `helm upgrade --install` + `kubectl apply -k deploy/minikube/` (see Phase 5).
+
+- **The dashboard survives every restart.** `.sunny/web` is decoupled from app pods (early publisher or Nginx static mount).
+- After any restart that changed code, the responsible agent still runs `graphify update <project-root>`.
 
 ## Secrets protocol (append-as-needed — no agent gets blocked)
 
@@ -502,6 +545,17 @@ repeat:
   6. Launch context-agent to append issue-resolution-log.md
   7. goto repeat
 ```
+
+## Phase 2.45 — Dev Minikube bootstrap (optional)
+
+After Phase 2 exit phrase (`No issues found. Backend approved.`), before Phase 2.5 database:
+
+1. If `minikube status` is not Running and operator has not blocked it: `minikube start --driver=docker` (dev profile).
+2. `eval $(minikube docker-env)` → build images for gateway + microservices.
+3. `kubectl apply -k deploy/minikube/` (Vikram-scaffolded manifests).
+4. Launch **context-agent** to note Minikube dev URL / NodePort in `backend-summary.md` appendix if changed.
+
+Skip if Minikube unavailable — testing stages use Compose fallback per **Service lifecycle & restarts**.
 
 ## Phase 2.5 — Database loop
 

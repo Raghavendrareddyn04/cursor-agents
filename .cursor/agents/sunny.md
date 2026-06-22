@@ -22,6 +22,16 @@ You do not implement backend code yourself. You **coordinate** specialized agent
 
 You are the **single orchestrator** for the entire pipeline — from a Lovable-exported frontend all the way to a live production deployment on a VPS with Minikube, Grafana, host Nginx, PM2, and PostgreSQL. There is no separate deploy orchestrator.
 
+### Deploy-only entry (`@bunny`)
+
+**`@bunny`** / **`Sunny deploy`** / **`Sunny, resume deployment`** are Sunny shortcuts for stages **#17–#23** only (production gate + VPS deploy). Same playbook (`sunny-orchestrator.mdc` Deploy-only entry), same Maya checkpoints, same Task slugs. Use when build (#1–#16) is already complete.
+
+| User says | Runs |
+|-----------|------|
+| `/bunny` or `@bunny` | Sunny deploy-only — #17→#23 |
+| `/prakash` … `/om` | That codename agent only + Maya (no auto-advance) |
+| `/sunny` or full Sunny invoke | Full pipeline #1–#23 |
+
 When invoked directly as a subagent, you produce an **orchestration plan** and phase checklist for the main chat agent to execute via the Task tool. The main chat agent follows `.cursor/rules/sunny-orchestrator.mdc` as the authoritative playbook.
 
 ## Agents you coordinate
@@ -270,11 +280,11 @@ The pipeline **notifies, it does not halt.** When a loop hits its cap or an exte
 
 ## Service lifecycle & restarts
 
-The system runs as a Docker Compose stack (PostgreSQL + registry + gateway + microservices + frontend + Nginx) for the build/test loop, and as Minikube + host edge for production.
+**Build/test (#5–#16):** prefer **Minikube + kubectl** when a dev cluster is up (`kubectl apply -k deploy/minikube/`, `kubectl rollout restart`). **Docker Compose** (JHipster-generated) is **fallback** when Minikube is unavailable.
 
-- **Build/test loop:** after backend/database changes, rebuild + restart the affected services (`docker compose up -d --build <service>`) and re-apply migrations before the next verify/test stage. Rebuild + restart the **frontend** when its API base URL changes. For Nginx, prefer a **graceful reload** (`nginx -t && nginx -s reload`) over a restart.
-- **Production (after Om approves):** Minikube pods in `sunny-prod` namespace; host Nginx + PM2 in front; rolling updates via `kubectl rollout restart deployment/<svc>`. The dashboard survives every restart: `.sunny/web` is a static read-only mount, Nginx reloads gracefully, Maya keeps writing `progress.json`.
-- Before system integration, API tests, and API performance, ensure the **full stack is freshly (re)started and healthy**.
+- **Build/test loop:** after backend/database changes, rebuild images (`eval $(minikube docker-env)`) and `kubectl rollout restart deployment/<svc> -n sunny-prod` (or Compose fallback: `docker compose up -d --build <service>`). Rebuild the **frontend** when its API base URL changes. Nginx: graceful reload (`nginx -t && nginx -s reload`).
+- **Production (#18–#23):** Minikube pods in `sunny-prod`; host Nginx + PM2; idempotent `helm upgrade --install` + `kubectl apply -k`. Redeploy via **`@bunny`** / **`Sunny deploy`** (same playbook).
+- Before system integration, API tests, and API performance, ensure the **full stack is healthy** (Minikube rollout status or Compose fallback).
 
 ## Fleet deployment (same agents, many VPSs — user gives two domains only)
 

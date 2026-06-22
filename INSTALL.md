@@ -2,7 +2,7 @@
 
 Everything you need to install **before** running Sunny on a VPS (or locally), how to **clone and wire GitHub repos**, and how to avoid the common edge cases.
 
-**Stack:** React frontend · JHipster microservices backend (Java) · PostgreSQL · **Docker Compose (build/dev in app repo)** · **Minikube + Helm + Grafana (production via [`deploy/`](deploy/))** · Nginx + Certbot · Graphify · optional Newman / Playwright / k6.
+**Stack:** React frontend · JHipster microservices backend (Java) · PostgreSQL · **Minikube + Docker (primary runtime)** · **Docker Compose (fallback in app repo)** · **Helm + Grafana (production via [`deploy/`](deploy/))** · Nginx + Certbot · Graphify · optional Newman / Playwright / k6.
 
 ---
 
@@ -22,8 +22,9 @@ Everything you need to install **before** running Sunny on a VPS (or locally), h
 
 | Model | Where | Purpose |
 |-------|--------|---------|
-| **Build / dev / tests** | `docker-compose.yml` in the **target project** (created by Vikram) | Local PostgreSQL + gateway + services for generation, tests, and Nginx stage |
-| **Production VPS** | [`deploy/`](deploy/) in this agents repo + Rajesh→Om on the server | Minikube (app workloads), Helm (Grafana/Prometheus), host Nginx + PM2 + PostgreSQL |
+| **Build / test (#5–#16)** | **Minikube + kubectl** + `deploy/minikube/` (Vikram scaffolds) | Primary: `eval $(minikube docker-env)`, `kubectl apply -k`, rollout restart |
+| **Build / test fallback** | `docker-compose.yml` in the **target project** (JHipster-generated) | When Minikube dev cluster is unavailable |
+| **Production VPS (#18–#23)** | [`deploy/`](deploy/) + Rajesh→Om | **One** idempotent deploy; redeploy via same Sunny playbook (`@bunny` = deploy-only shortcut) |
 
 There is **no** single `docker-compose.yml` in this agents-only repo that deploys the full production stack. Production uses **Minikube with the Docker driver** — see [`DEPLOY-ASSETS.md`](DEPLOY-ASSETS.md) and [`deploy/README.md`](deploy/README.md).
 
@@ -157,7 +158,7 @@ sudo apt install -y \
 
 ## 5. Docker & Docker Compose (required for build/dev)
 
-Docker is required on the VPS for **two roles**: (1) **build pipeline** — JHipster generates `docker-compose.yml` in the target app repo so agents can run PostgreSQL, gateway, and services for tests; (2) **production** — Docker is the **Minikube driver** (`minikube start --driver=docker`). Production app workloads run in **Kubernetes (Minikube)**, not Compose — see [`deploy/README.md`](deploy/README.md) and [§11b](#11b-production-deployment-prerequisites-minikube--helm--grafana).
+Docker is required on the VPS for **two roles**: (1) **image builds** — `eval $(minikube docker-env)` for Minikube (primary); JHipster `docker-compose.yml` in the app repo as **fallback** when the dev cluster is down; (2) **production** — Docker is the **Minikube driver** (`minikube start --driver=docker`). App workloads run in **Kubernetes (Minikube)**, not Compose — see [`deploy/README.md`](deploy/README.md) and [§11b](#11b-production-deployment-prerequisites-minikube--helm--grafana).
 
 ```bash
 # Official Docker CE install (Ubuntu):
@@ -231,7 +232,10 @@ git push origin main
 # On VPS:
 cd /opt/my-project
 git pull origin main
-# Rebuild/restart only what changed:
+# Rebuild/restart (Minikube preferred when cluster is up):
+eval $(minikube docker-env) && docker build -t <image> <context>
+kubectl rollout restart deployment/<service> -n sunny-prod
+# Compose fallback:
 docker compose up -d --build <service>
 ```
 
@@ -425,7 +429,7 @@ docker compose -f .sunny/web/docker-compose.yml up -d
 | **Port 8787 blocked** | Open in UFW/security group, or set `PROGRESS_PORT` in `.env`. |
 | **Certbot fails** | DNS A record must point to VPS **before** Nginx stage; ports 80/443 open. |
 | **Frontend still calls localhost API** | Naveen sets `VITE_API_URL` / `REACT_APP_API_URL` to `https://<domain>/api` and **rebuilds** the frontend container. |
-| **Code changed but tests see old behavior** | Agents rebuild + restart affected services (`docker compose up -d --build <service>`). See README "Restarts". |
+| **Code changed but tests see old behavior** | Prefer `kubectl rollout restart` after image rebuild when Minikube is up; else `docker compose up -d --build <service>`. See README "Restarts". |
 | **Dashboard disappears during restart** | Early publisher is separate; Nginx uses graceful reload; `.sunny/web` is static — progress stays visible. |
 | **Private GitHub repo on VPS** | Use deploy key or `gh auth login` / PAT; `git pull` in deploy script. |
 | **Two repos (agents + app)** | Symlink or copy `.cursor/` into project root; keep agents repo pull separate. |

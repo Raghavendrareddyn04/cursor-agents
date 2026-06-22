@@ -42,7 +42,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 
 ## Required workflow
 
-1. **Stand up a fresh system**: define/confirm a Docker Compose (or equivalent) that boots registry, services, gateway, PostgreSQL, and serves the frontend. Rebuild + restart so the latest code/config is live (`docker compose up -d --build`; recreate from clean if state is dirty) and **wait for health/readiness** before testing.
+1. **Stand up a fresh system:** prefer **Minikube** when running — `kubectl apply -k deploy/minikube/`, gateway via **NodePort** or `https://<domain>/api`, wait for rollout + health. **Fallback:** Docker Compose (`docker compose up -d --build`) for registry, services, gateway, PostgreSQL, and frontend when Minikube is unavailable. Rebuild/restart so latest code is live; **wait for health/readiness** before testing.
 2. **Derive scenarios** from `project-context.md` critical journeys that cross tiers (e.g. create via UI → verify persisted → appears after reload).
 3. **Write collective tests** that drive the real frontend/API and assert UI state, API responses, and DB persistence together.
 4. **Run** the suite against the running stack; capture pass/total and artifacts (traces, logs).
@@ -61,7 +61,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 ```markdown
 ## System Integration Tests
 
-**Stack:** {compose/Testcontainers description}
+**Stack:** {Minikube NodePort / domain / compose fallback}
 **Scenarios added:** {count} (list key journeys)
 **Tiers exercised:** frontend + gateway + services + PostgreSQL
 **Files added/updated:** {paths}
