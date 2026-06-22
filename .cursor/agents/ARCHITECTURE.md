@@ -12,12 +12,48 @@ Visual reference for the Sunny multi-agent system: component architecture, contr
 
 | Topic | Section |
 |-------|---------|
+| **All 23 dashboard stages (#1–#23)** | [§0.2](#02-dashboard-stages-master-index-123) |
 | **Container runtime & `deploy/` assets** | [§0.1](#01-container-runtime--deploy-assets) |
 | Pipeline order & loops | §0 tables · [§1](#1-system-architecture-pipeline-order) |
+| Per-stage detail (build #1–#16) | [§6.3](#63-dashboard-stages-123--individual-reference) |
 | Production deploy tail (Rajesh→Om) | [§6.5](#65-production-deployment-tail-stages-1823) |
 | Redeployment / idempotency | [§6.6](#66-redeployment--idempotency) |
 | `state.json` phase machine | [§10](#10-workflow-state-machine) |
 | Operator runbook | [`deploy/README.md`](../../deploy/README.md) · [`DEPLOY-ASSETS.md`](../../DEPLOY-ASSETS.md) |
+
+## 0.2 Dashboard stages — master index (#1–#23)
+
+**Authoritative numbering** for the live progress dashboard (`progress.json`), `state.json.stages[]`, and Sunny orchestration. Every stage has exactly one dashboard number — **#16 is API performance (Pawan)**, not production.
+
+| # | `stage.key` | Label | Codename | Generate agent | Verify agent (readonly) | Fix agent | `state.json` counter | Exit phrase (exact) |
+|---|-------------|-------|----------|----------------|-------------------------|-----------|----------------------|------------------------|
+| **1** | `intake` | Intake | Maya | `context-agent` | — | — | — | *(checkpoint only — advances to #2)* |
+| **2** | `frontend_sanitize` | Frontend sanitization | Isha | `frontend-sanitize-agent` | `frontend-sanitize-verify-agent` | `frontend-sanitize-fix-agent` | `frontendSanitizeVerifyIterations` | `Frontend sanitization complete.` |
+| **3** | `architecture` | Architecture | Arjun | `architecture-agent` | `architecture-verify-agent` | `architecture-fix-agent` | `architectureVerifyIterations` | `Architecture approved.` |
+| **4** | `supabase_removal` | Supabase & Lovable removal | Kiran | `supabase-removal-agent` | `supabase-removal-verify-agent` | `supabase-removal-fix-agent` | `supabaseRemovalVerifyIterations` | `Supabase removal complete.` |
+| **5** | `backend` | Backend generation | Vikram | `jhipster-backend-agent` | — | — | — | *(generate only — advances to #6)* |
+| **6** | `backend_verify` | Backend verification | Vikram Verify / Fix | — | `jhipster-verify-agent` | `issue-resolution-agent` | `backendVerifyIterations` | `No issues found. Backend approved.` |
+| **7** | `database` | Database | Dhruv | `database-agent` | `database-verify-agent` | `database-fix-agent` | `databaseVerifyIterations` | `Database approved.` |
+| **8** | `nginx` | Nginx & SSL edge | Naveen | `nginx-agent` | `nginx-verify-agent` | `nginx-fix-agent` | `nginxVerifyIterations` | `Nginx and SSL approved.` |
+| **9** | `testing_backend` | Backend testing | Rohan / Karan / Aditya | `backend-{unit,integration,functional}-test-agent` | `backend-*-test-verify-agent` | `backend-*-test-fix-agent` | `backendUnitTestVerifyIterations`, `backendIntegrationTestVerifyIterations`, `backendFunctionalTestVerifyIterations` | `Backend unit testing requirements satisfied.` → `Backend integration testing requirements satisfied.` → `Backend functional testing requirements satisfied.` *(all 3 layers)* |
+| **10** | `testing_frontend` | Frontend testing | Priya / Neha / Anika | `frontend-{unit,integration,functional}-test-agent` | `frontend-*-test-verify-agent` | `frontend-*-test-fix-agent` | `frontendUnitTestVerifyIterations`, `frontendIntegrationTestVerifyIterations`, `frontendFunctionalTestVerifyIterations` | `Frontend unit testing requirements satisfied.` → `Frontend integration testing requirements satisfied.` → `Frontend functional testing requirements satisfied.` *(all 3 layers)* |
+| **11** | `testing_system` | System integration testing | Sanjay | `system-integration-test-agent` | `system-integration-test-verify-agent` | `system-integration-test-fix-agent` | `systemIntegrationTestVerifyIterations` | `System integration testing requirements satisfied.` |
+| **12** | `swagger` | Swagger / OpenAPI | Surya | `swagger-agent` | `swagger-verify-agent` | `swagger-fix-agent` | `swaggerVerifyIterations` | `Swagger documentation requirements satisfied.` |
+| **13** | `javadoc` | Javadoc | Jaya | `javadoc-agent` | `javadoc-verify-agent` | `javadoc-fix-agent` | `javadocVerifyIterations` | `Javadoc documentation requirements satisfied.` |
+| **14** | `api_collection` | API collection | Chetan | `api-collection-agent` | `api-collection-verify-agent` | `api-collection-fix-agent` | `apiCollectionVerifyIterations` | `API collection requirements satisfied.` |
+| **15** | `api_testing` | API tests | Tara | `api-test-agent` | `api-test-verify-agent` | `api-test-fix-agent` | `apiTestVerifyIterations` | `API testing requirements satisfied.` |
+| **16** | `api_performance` | API performance | Pawan | `api-performance-test-agent` | `api-performance-test-verify-agent` | `api-performance-test-fix-agent` | `apiPerformanceTestVerifyIterations` | `API performance testing requirements satisfied.` |
+| **17** | `production` | Production | Prakash | — | `production-standards-agent` | `production-fix-agent` | `productionVerifyIterations` | `Final approval granted. System is production-ready.` |
+| **18** | `deployment_platform` | Deploy platform | Rajesh | `deployment-platform-agent` | `deployment-platform-verify-agent` | `deployment-platform-fix-agent` | `deploymentPlatformVerifyIterations` | `Deployment platform approved.` |
+| **19** | `deployment_provision` | Server provisioning | Suresh | `server-provision-agent` | `server-provision-verify-agent` | `server-provision-fix-agent` | `serverProvisionVerifyIterations` | `Server provisioning approved.` |
+| **20** | `deployment_database` | Deploy database | Lakshmi | `deployment-database-agent` | `deployment-database-verify-agent` | `deployment-database-fix-agent` | `deploymentDatabaseVerifyIterations` | `Deployment database approved.` |
+| **21** | `deployment_backend` | Deploy backend | Manoj | `deployment-backend-agent` | `deployment-backend-verify-agent` | `deployment-backend-fix-agent` | `deploymentBackendVerifyIterations` | `Deployment backend approved.` |
+| **22** | `deployment_edge` | Deploy edge | Asha | `deployment-edge-agent` | `deployment-edge-verify-agent` | `deployment-edge-fix-agent` | `deploymentEdgeVerifyIterations` | `Deployment edge approved.` |
+| **23** | `deployment_verify` | Final deployment verification | Om | — | `deployment-verify-agent` | `om-fix-agent` | `deploymentVerifyIterations` | `Production deployment verified. System is live.` |
+
+**Loop contract:** stages **#2–#16** and **#18–#22** use generate → verify (readonly) → fix → re-verify (cap **5** per counter). **#1**, **#5** are generate/checkpoint only. **#17** and **#23** are audit-only generate (no separate generate agent). `counts.total` = **23**. `phase: complete` only after **#23** exit phrase.
+
+**Deploy-only shortcut:** `@bunny` / `Sunny deploy` resumes from first non-`done` stage in **#17–#23** (see [§6.5](#65-production-deployment-tail-stages-1823)).
 
 ## 0.1 Container runtime & deploy assets
 
@@ -118,28 +154,34 @@ Each agent has a human codename; a family shares a base name and its verify/fix 
 
 ## 1. System architecture (pipeline order)
 
-The agents run as an **ordered pipeline**: sanitize the Lovable frontend (Isha), design the architecture, **remove Supabase/Lovable and wire REST clients** (Kiran), generate the backend, verify and fix it, harden the database, configure Nginx & SSL, then generate and verify tests (backend, then frontend), then collective system integration tests (frontend + backend + database together), then the documentation & API stages (Swagger, Javadoc, API collection, API status tests, API performance), then the final production audit, then **deploy to the VPS via Minikube with Grafana observability**. **23 dashboard stages** (intake + 22 execution stages). The Driver launches each stage via the Task tool; Maya persists output after every stage; Leela logs actionable problems to `.sunny/KNOWN_ISSUES.md`.
+The agents run as an **ordered pipeline** of **23 numbered dashboard stages (#1–#23)** — see [§0.2](#02-dashboard-stages-master-index-123). Intake (#1) seeds `.env` and the dashboard; Isha→Kiran→Vikram build the stack; Dhruv and Naveen harden data and edge; backend/frontend/system tests run; Surya→Pawan cover docs/API (**#12–#16**, including **#16 API performance**); Prakash (#17) gates production; Rajesh→Om (#18–#23) deploy to the VPS. The Driver launches each stage via the Task tool; Maya persists output after every handoff; Leela logs actionable problems to `.sunny/KNOWN_ISSUES.md`.
 
 ```mermaid
 flowchart TB
     User([User]) --> Driver["Driver: main chat agent<br/>follows sunny-orchestrator.mdc"]
 
-    subgraph pipeline [Execution Pipeline - top to bottom]
+    subgraph pipeline [Execution Pipeline — dashboard #1 to #23]
         direction TB
-        S0["Stage 1 - Frontend sanitization<br/>frontend-sanitize-agent<br/>verify: frontend-sanitize-verify-agent (readonly)<br/>fix: frontend-sanitize-fix-agent"]
-        S0b["Stage 2 - Architecture & boilerplate<br/>architecture-agent<br/>verify: architecture-verify-agent (readonly)<br/>fix: architecture-fix-agent"]
-        S0c["Stage 3 - Supabase & Lovable removal<br/>supabase-removal-agent<br/>verify: supabase-removal-verify-agent (readonly)<br/>fix: supabase-removal-fix-agent"]
-        S1["Stage 4 - Generate backend<br/>jhipster-backend-agent"]
-        S2["Stage 5 - Verify backend (readonly)<br/>jhipster-verify-agent<br/>fix: issue-resolution-agent"]
-        SD["Stage 6 - Database hardening<br/>database-agent<br/>verify: database-verify-agent (readonly)<br/>fix: database-fix-agent"]
-        SN["Stage 7 - Nginx & SSL edge<br/>nginx-agent: reverse proxy + domain + Certbot<br/>verify: nginx-verify-agent (readonly)<br/>fix: nginx-fix-agent"]
-        SB["Stage 8 - Backend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
-        SF["Stage 9 - Frontend tests<br/>per layer: unit, integration, functional<br/>each layer has its own verify (readonly) + fix agent"]
-        SI["Stage 10 - System integration tests (collective)<br/>frontend + backend + PostgreSQL together<br/>system-integration-test-agent<br/>verify: system-integration-test-verify-agent (readonly)<br/>fix: system-integration-test-fix-agent"]
-        SDOC["Stages 11-15 - Documentation & API<br/>Swagger -> Javadoc -> API collection -> API tests -> API performance<br/>each: generate + verify (readonly) + fix loop"]
-        S5["Dashboard #17 - Production (readonly audit)<br/>production-standards-agent: audits ALL prior outputs<br/>+ comprehensive final report<br/>fix: production-fix-agent"]
-        SDEP["Dashboard #18-23 - VPS deployment (Minikube + Grafana + Nginx + PM2)<br/>#18 Rajesh platform -> #19 Suresh provision -> #20 Lakshmi DB<br/>-> #21 Manoj backend -> #22 Asha edge -> #23 Om final verify"]
-        S0 --> S0b --> S0c --> S1 --> S2 --> SD --> SN --> SB --> SF --> SI --> SDOC --> S5 --> SDEP
+        SIntake["#1 Intake<br/>context-agent: .env, RUN_ID, dashboard seed"]
+        S0["#2 Frontend sanitization — Isha<br/>frontend-sanitize-agent → verify → fix"]
+        S0b["#3 Architecture — Arjun<br/>architecture-agent → verify → fix"]
+        S0c["#4 Supabase removal — Kiran<br/>supabase-removal-agent → verify → fix"]
+        S1["#5 Backend generation — Vikram<br/>jhipster-backend-agent + deploy/minikube scaffold"]
+        S2["#6 Backend verification — Vikram Verify<br/>jhipster-verify-agent → issue-resolution-agent"]
+        SD["#7 Database — Dhruv<br/>database-agent → verify → fix"]
+        SN["#8 Nginx & SSL — Naveen<br/>nginx-agent → verify → fix"]
+        SB["#9 Backend testing — Rohan/Karan/Aditya<br/>unit → integration → functional (each verify+fix)"]
+        SF["#10 Frontend testing — Priya/Neha/Anika<br/>unit → integration → functional (each verify+fix)"]
+        SI["#11 System integration — Sanjay<br/>system-integration-test-agent → verify → fix"]
+        SSw["#12 Swagger — Surya<br/>swagger-agent → verify → fix"]
+        SJd["#13 Javadoc — Jaya<br/>javadoc-agent → verify → fix"]
+        SAc["#14 API collection — Chetan<br/>api-collection-agent → verify → fix"]
+        SAt["#15 API tests — Tara<br/>api-test-agent → verify → fix"]
+        SAp["#16 API performance — Pawan<br/>api-performance-test-agent → verify → fix<br/>load 1/10/20/30 concurrency"]
+        S5["#17 Production — Prakash<br/>production-standards-agent → production-fix-agent"]
+        SDEP["#18–#23 VPS deployment<br/>#18 Rajesh → #19 Suresh → #20 Lakshmi<br/>→ #21 Manoj → #22 Asha → #23 Om"]
+        SIntake --> S0 --> S0b --> S0c --> S1 --> S2 --> SD --> SN --> SB --> SF --> SI
+        SI --> SSw --> SJd --> SAc --> SAt --> SAp --> S5 --> SDEP
     end
 
     Driver -->|launches each stage in order| pipeline
@@ -169,7 +211,12 @@ flowchart TB
         LEL["issues-log-agent<br/>• Per-project KNOWN_ISSUES.md<br/>• Symptom / cause / fix / prevention"]
     end
 
-    subgraph sSan [Stage 1 - Frontend sanitization]
+    subgraph sIntake [Dashboard #1 - Intake]
+        direction LR
+        MAY["context-agent (Maya)<br/>• project-context.md + state.json<br/>• .env secrets + RUN_ID<br/>• .sunny/web dashboard seed<br/>• fleet push token fetch"]
+    end
+
+    subgraph sSan [Dashboard #2 - Frontend sanitization]
         direction LR
         ISH["frontend-sanitize-agent<br/>• Remove Supabase/Lovable deps<br/>• Strip branding + integrations<br/>• Compile-safe stubs only"]
         ISHV["frontend-sanitize-verify-agent - readonly<br/>• Zero supabase/lovable in src/<br/>• Build passes<br/>• Exit: Frontend sanitization complete."]
@@ -178,7 +225,7 @@ flowchart TB
         ISHV -->|issues| ISHF --> ISHV
     end
 
-    subgraph sArch [Stage 2 - Architecture and boilerplate]
+    subgraph sArch [Dashboard #3 - Architecture and boilerplate]
         direction LR
         ARC["architecture-agent<br/>• Service decomposition (bounded contexts)<br/>• Domain model + API contract map<br/>• Draft JDL + boilerplate/scaffolding<br/>• Microservices, PostgreSQL, no mock data"]
         ARCV["architecture-verify-agent - readonly<br/>• Decomposition + API coverage review<br/>• JDL consistency + auth design<br/>• Exit: Architecture approved."]
@@ -205,7 +252,7 @@ flowchart TB
         VER -->|issues| ISS --> VER
     end
 
-    subgraph sDb [Stage 5 - Database hardening]
+    subgraph sDb [Dashboard #7 - Database hardening]
         direction LR
         DBA["database-agent<br/>• PostgreSQL connections + HikariCP<br/>• Liquibase migrations, constraints, indexes<br/>• Schema standards, no mock data"]
         DBV["database-verify-agent - readonly<br/>• Schema/migrations + integrity audit<br/>• Migrations apply on fresh PostgreSQL<br/>• Exit: Database approved."]
@@ -214,7 +261,7 @@ flowchart TB
         DBV -->|issues| DBF --> DBV
     end
 
-    subgraph sNg [Stage 6 - Nginx & SSL edge]
+    subgraph sNg [Dashboard #8 - Nginx and SSL edge]
         direction LR
         NG["nginx-agent<br/>• Reverse proxy: frontend + gateway on domain<br/>• TLS termination, HTTP→HTTPS redirect<br/>• Certbot/Let's Encrypt + auto-renewal"]
         NGV["nginx-verify-agent - readonly<br/>• Routing + TLS + Certbot audit<br/>• Exit: Nginx and SSL approved."]
@@ -223,7 +270,7 @@ flowchart TB
         NGV -->|issues| NGF --> NGV
     end
 
-    subgraph s3 [Stage 7 - Backend testing - per-layer verify and fix]
+    subgraph s3 [Dashboard #9 - Backend testing - per-layer verify and fix]
         direction TB
         subgraph s3u [Unit layer]
             direction LR
@@ -252,7 +299,7 @@ flowchart TB
         s3u --> s3i --> s3f
     end
 
-    subgraph s4 [Stage 8 - Frontend testing - per-layer verify and fix]
+    subgraph s4 [Dashboard #10 - Frontend testing - per-layer verify and fix]
         direction TB
         subgraph s4u [Unit layer]
             direction LR
@@ -281,7 +328,7 @@ flowchart TB
         s4u --> s4i --> s4f
     end
 
-    subgraph sSi [Stage 9 - System integration testing - collective full-stack]
+    subgraph sSi [Dashboard #11 - System integration testing - collective full-stack]
         direction LR
         SI["system-integration-test-agent<br/>• Runs whole stack together<br/>• Real frontend + gateway + services + PostgreSQL<br/>• Cross-tier journeys + auth propagation"]
         SIV["system-integration-test-verify-agent - readonly<br/>• Full-stack journey coverage on real stack<br/>• UI + API + DB persistence asserted<br/>• Exit: System integration testing requirements satisfied."]
@@ -290,9 +337,9 @@ flowchart TB
         SIV -->|gaps| SIF --> SIV
     end
 
-    subgraph sDoc [Stages 10-14 - Documentation and API]
+    subgraph sDoc [Dashboard #12-16 - Documentation and API]
         direction TB
-        subgraph sSw [Swagger / OpenAPI]
+        subgraph sSw [Dashboard #12 - Swagger / OpenAPI]
             direction LR
             SW["swagger-agent<br/>• springdoc annotations per service<br/>• security scheme + exported spec"]
             SWV["swagger-verify-agent - readonly<br/>• Spec completeness + accuracy<br/>• Exit: Swagger documentation requirements satisfied."]
@@ -300,7 +347,7 @@ flowchart TB
             SW --> SWV
             SWV -->|gaps| SWF --> SWV
         end
-        subgraph sJd [Javadoc]
+        subgraph sJd [Dashboard #13 - Javadoc]
             direction LR
             JD["javadoc-agent<br/>• Javadoc for public APIs<br/>• failOnWarnings build"]
             JDV["javadoc-verify-agent - readonly<br/>• Coverage + clean build<br/>• Exit: Javadoc documentation requirements satisfied."]
@@ -308,7 +355,7 @@ flowchart TB
             JD --> JDV
             JDV -->|gaps| JDF --> JDV
         end
-        subgraph sAc [API collection - Postman]
+        subgraph sAc [Dashboard #14 - API collection - Postman]
             direction LR
             AC["api-collection-agent<br/>• Postman from OpenAPI<br/>• auth + chaining + Newman"]
             ACV["api-collection-verify-agent - readonly<br/>• Endpoint coverage + Newman green<br/>• Exit: API collection requirements satisfied."]
@@ -316,7 +363,7 @@ flowchart TB
             AC --> ACV
             ACV -->|gaps| ACF --> ACV
         end
-        subgraph sAt [API tests - status]
+        subgraph sAt [Dashboard #15 - API tests - status]
             direction LR
             AT["api-test-agent<br/>• Calls every endpoint<br/>• Asserts 200/appropriate status"]
             ATV["api-test-verify-agent - readonly<br/>• Every endpoint correct status<br/>• Exit: API testing requirements satisfied."]
@@ -324,7 +371,7 @@ flowchart TB
             AT --> ATV
             ATV -->|gaps| ATF --> ATV
         end
-        subgraph sAp [API performance - 1/10/20/30]
+        subgraph sAp [Dashboard #16 - API performance - 1/10/20/30]
             direction LR
             AP["api-performance-test-agent<br/>• Load at 1,10,20,30 concurrency<br/>• latency/throughput/error rate"]
             APV["api-performance-test-verify-agent - readonly<br/>• All levels + thresholds met<br/>• Exit: API performance testing requirements satisfied."]
@@ -382,7 +429,7 @@ flowchart TB
         sRaj --> sSur --> sLak --> sMan --> sAsh --> sOm
     end
 
-    orch --> sSan --> sArch --> sKir --> s12 --> sDb --> sNg --> s3 --> s4 --> sSi --> sDoc --> s5 --> sDep
+    orch --> sIntake --> sSan --> sArch --> sKir --> s12 --> sDb --> sNg --> s3 --> s4 --> sSi --> sDoc --> s5 --> sDep
 ```
 
 ---
@@ -415,7 +462,16 @@ flowchart TD
     CapA -->|No| AFix[architecture-fix-agent] --> PA3["context-agent<br/>architecture-fix-log.md"] --> AVer
     CapA -->|Yes| Attention["stage = needs-attention<br/>notify + continue if possible<br/>(blocked only on hard dependency)"]
 
-    AApproved -->|Yes| Gen[jhipster-backend-agent]
+    AApproved -->|Yes| KGen[supabase-removal-agent]
+    KGen --> PK1["context-agent<br/>supabase-removal-summary.md"]
+    PK1 --> KVer[supabase-removal-verify-agent]
+    KVer --> PK2["context-agent<br/>supabase-removal-verify-report.md"]
+    PK2 --> KApproved{"lastVerdict ==<br/>'Supabase removal complete.'?"}
+    KApproved -->|No| CapK{"supabaseRemovalVerifyIterations<br/>>= 5?"}
+    CapK -->|No| KFix[supabase-removal-fix-agent] --> PK3["context-agent<br/>supabase-removal-fix-log.md"] --> KVer
+    CapK -->|Yes| Attention
+
+    KApproved -->|Yes| Gen[jhipster-backend-agent]
     Gen --> P1["context-agent<br/>backend-summary.md"]
 
     P1 --> Verify[jhipster-verify-agent]
@@ -463,7 +519,7 @@ flowchart TD
     CapSI -->|No| SIFix[system-integration-test-fix-agent] --> PSI3["context-agent<br/>system-integration-test-fix-log.md"] --> SIVer
     CapSI -->|Yes| Attention
     SISat -->|Yes| DocAPI["Documentation & API stages (see Section 5.6)<br/>Swagger -> Javadoc -> API collection -> API tests -> API performance<br/>each: generate -> verify -> fix -> re-verify, cap 5"]
-    DocAPI --> DocSat{"all 5 doc/API<br/>stages satisfied?"}
+    DocAPI --> DocSat{"all 5 doc/API<br/>stages #12-16 satisfied?"}
     DocSat -->|No, any stage hit cap 5| Attention
     DocSat -->|Yes| Prod["production-standards-agent<br/>audits ALL prior outputs + final report"]
     Prod --> P10["context-agent<br/>production-report.md"]
@@ -471,7 +527,8 @@ flowchart TD
     PSat -->|No| CapP{"productionVerifyIterations<br/>>= 5?"}
     CapP -->|No| PFix[production-fix-agent] --> P11["context-agent<br/>production-fix-log.md"] --> Prod
     CapP -->|Yes| Attention
-    PSat -->|Yes| Final(["Final Approval<br/>System is production-ready."])
+    PSat -->|Yes| DepTail["Deployment tail #18-#23<br/>Rajesh → Suresh → Lakshmi → Manoj → Asha → Om"]
+    DepTail --> Final(["phase: complete<br/>Production deployment verified. System is live."])
 ```
 
 ---
@@ -692,6 +749,38 @@ On `Final approval granted.`, Sunny does **not** mark `phase: complete` — it a
 
 ---
 
+## 6.3 Dashboard stages #1–#23 — individual reference
+
+Per-stage **Maya artifacts** (under `.sunny/context/`) and **estimate defaults** (`estimateMin`). Master index: [§0.2](#02-dashboard-stages-master-index-123).
+
+| # | Key artifacts (summary → verify → fix) | `estimateMin` |
+|---|----------------------------------------|---------------|
+| **1** | `project-context.md`, `state.json` seed | 2 |
+| **2** | `frontend-sanitize-summary.md` → `frontend-sanitize-verify-report.md` → `frontend-sanitize-fix-log.md` | 15 |
+| **3** | `architecture-summary.md` (+ draft JDL, `deploy/port-map.md` rows) → `architecture-verify-report.md` → `architecture-fix-log.md` | 15 |
+| **4** | `supabase-removal-summary.md` → `supabase-removal-verify-report.md` → `supabase-removal-fix-log.md` | 15 |
+| **5** | `backend-summary.md` (+ `deploy/minikube/deployment-*.yaml` scaffold) | 20 |
+| **6** | `verify-report.md` → `issue-resolution-log.md` | 15 |
+| **7** | `database-summary.md` → `database-verify-report.md` → `database-fix-log.md` | 15 |
+| **8** | `nginx-summary.md` → `nginx-verify-report.md` → `nginx-fix-log.md` | 15 |
+| **9** | `backend-test-report.md` → per-layer `backend-*-test-verify-report.md` → `backend-*-test-fix-log.md` | 40 |
+| **10** | `frontend-test-report.md` → per-layer `frontend-*-test-verify-report.md` → `frontend-*-test-fix-log.md` | 40 |
+| **11** | `system-integration-test-report.md` → `system-integration-test-verify-report.md` → `system-integration-test-fix-log.md` | 25 |
+| **12** | `swagger-report.md` → `swagger-verify-report.md` → `swagger-fix-log.md` | 12 |
+| **13** | `javadoc-report.md` → `javadoc-verify-report.md` → `javadoc-fix-log.md` | 10 |
+| **14** | `api-collection-report.md` → `api-collection-verify-report.md` → `api-collection-fix-log.md` | 12 |
+| **15** | `api-test-report.md` → `api-test-verify-report.md` → `api-test-fix-log.md` | 15 |
+| **16** | `api-performance-test-report.md` → `api-performance-test-verify-report.md` → `api-performance-test-fix-log.md` — **load at 1, 10, 20, 30 concurrent requests; latency/throughput/error-rate thresholds** | 20 |
+| **17** | `production-report.md` → `production-fix-log.md` — audits **all** prior stages | 20 |
+| **18** | `deployment-platform-summary.md` → `deployment-platform-verify-report.md` → `deployment-platform-fix-log.md` | 20 |
+| **19** | `server-provision-summary.md` → `server-provision-verify-report.md` → `server-provision-fix-log.md` | 15 |
+| **20** | `deployment-database-summary.md` → `deployment-database-verify-report.md` → `deployment-database-fix-log.md` | 15 |
+| **21** | `deployment-backend-summary.md` → `deployment-backend-verify-report.md` → `deployment-backend-fix-log.md` | 25 |
+| **22** | `deployment-edge-summary.md` → `deployment-edge-verify-report.md` → `deployment-edge-fix-log.md` | 20 |
+| **23** | `deployment-verify-report.md` → `deployment-fix-log.md` — collective audit of #18–#22 + `health-check.sh` | 20 |
+
+---
+
 ## 6.5 Production deployment tail (stages #18–#23)
 
 After the production audit passes, Sunny automatically runs **six** deploy sub-stages on the VPS. Each follows the same generate → verify (readonly) → fix loop (cap 5) used by every other stage. The final stage (Om) is verify/fix only.
@@ -725,7 +814,7 @@ flowchart LR
 | **#22** | Edge | `deployment-edge-agent` | `deployment-edge-verify-agent` | `deployment-edge-fix-agent` | `deploymentEdgeVerifyIterations` | `Deployment edge approved.` |
 | **#23** | Final | — | `deployment-verify-agent` | `om-fix-agent` | `deploymentVerifyIterations` | `Production deployment verified. System is live.` |
 
-Full per-stage handoffs and artifact names: [`context-agent.md`](context-agent.md) dashboard map + deployment handoff matrix.
+Full per-stage handoffs and artifact names: [§0.2](#02-dashboard-stages-master-index-123) · [§6.3](#63-dashboard-stages-123--individual-reference) · [`context-agent.md`](context-agent.md) dashboard map.
 
 **Production topology** (deployed by the agents above; full spec in [`deploy/README.md`](../../deploy/README.md)):
 
@@ -816,7 +905,7 @@ flowchart TD
 
 ### Same mechanism across all twenty-five loops
 
-The build pipeline (#1–#17) has 19 loops. The deployment pipeline (#18–#23) adds 6 more. Every loop uses the same generate → verify (readonly) → fix (cap 5) contract.
+The build path (**#2–#16**) plus production gate (**#17**) has **19** verify/fix loops. The deployment tail (**#18–#23**) adds **6** more. Every loop uses the same generate → verify (readonly) → fix (cap 5) contract.
 
 | Loop | Verify / audit agent | Fix agent | Counter | Exit phrase |
 |------|----------------------|-----------|---------|-------------|

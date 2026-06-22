@@ -100,7 +100,7 @@ def main() -> int:
     stages = _normalize_stages(progress.get("stages"))
     counts = progress.get("counts") or _stage_counts(stages)
     if not counts.get("total"):
-        counts["total"] = len(stages) or 16
+        counts["total"] = len(stages) or 23
 
     payload = {
         **progress,

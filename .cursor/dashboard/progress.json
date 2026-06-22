@@ -11,7 +11,7 @@
   "phase": "intake",
   "currentStage": "intake",
   "currentStageLabel": "Intake",
-  "counts": { "done": 0, "total": 16 },
+  "counts": { "done": 0, "total": 23 },
   "timeConsumedMs": 0,
   "estimatedTotalMs": 0,
   "estimatedRemainingMs": 0,
@@ -23,6 +23,7 @@
     { "key": "intake", "label": "Intake", "status": "active", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "frontend_sanitize", "label": "Frontend sanitization", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "architecture", "label": "Architecture", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "supabase_removal", "label": "Supabase & Lovable removal", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "backend", "label": "Backend generation", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "backend_verify", "label": "Backend verification", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "database", "label": "Database", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
@@ -35,6 +36,12 @@
     { "key": "api_collection", "label": "API collection", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "api_testing", "label": "API tests", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
     { "key": "api_performance", "label": "API performance", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
-    { "key": "production", "label": "Production", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" }
+    { "key": "production", "label": "Production", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "deployment_platform", "label": "Deploy platform (Minikube + Grafana)", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "deployment_provision", "label": "Server provisioning", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "deployment_database", "label": "Deploy database", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "deployment_backend", "label": "Deploy backend (Minikube)", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "deployment_edge", "label": "Deploy edge (Nginx + PM2)", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" },
+    { "key": "deployment_verify", "label": "Final deployment verification", "status": "pending", "startedAt": "", "endedAt": "", "durationMs": 0, "iterations": 0, "verdict": "" }
   ]
 }

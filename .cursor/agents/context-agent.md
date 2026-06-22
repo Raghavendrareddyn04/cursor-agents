@@ -339,7 +339,7 @@ Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from thi
 | 22 | Edge | `deployment-edge-agent` | `deployment-edge-verify-agent` | `deployment-edge-fix-agent` | `deploymentEdgeVerifyIterations` |
 | 23 | Final | — | `deployment-verify-agent` | `om-fix-agent` | `deploymentVerifyIterations` |
 
-> Note `backend` and `backend_verify` are **separate** dashboard stages. The `complete` phase marks `deployment_verify` done (all 23 stages). Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only. Full per-stage detail: [`ARCHITECTURE.md` §6c](ARCHITECTURE.md#6c-dashboard-stages-1723--individual-reference).
+> Note `backend` and `backend_verify` are **separate** dashboard stages. The `complete` phase marks `deployment_verify` done (all 23 stages). Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only. Full per-stage detail: [`ARCHITECTURE.md` §0.2 + §6.3](ARCHITECTURE.md#02-dashboard-stages-master-index-123).
 
 ### How to maintain it
 
