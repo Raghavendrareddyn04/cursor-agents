@@ -215,18 +215,10 @@ plugins:
 Hermes needs a skill that tells it how to act as Sunny:
 
 ```bash
-mkdir -p ~/.hermes/skills/devops/sunny
-cp /opt/cursor-agents/deploy/sunny-bridge-SKILL.md \
-   ~/.hermes/skills/devops/sunny/SKILL.md
+/opt/cursor-agents/bin/install-hermes-skills.sh
 ```
 
-Or symlink (updates when you `git pull` cursor-agents):
-
-```bash
-mkdir -p ~/.hermes/skills/devops
-ln -sf /opt/cursor-agents/deploy/sunny-bridge-SKILL.md \
-       ~/.hermes/skills/devops/sunny/SKILL.md
-```
+This symlinks `deploy/sunny-bridge-SKILL.md` → `~/.hermes/skills/devops/sunny/SKILL.md` and verifies the 23-stage agent inventory. Re-run after every `git pull` in cursor-agents.
 
 After editing paths inside the skill for your VPS, restart gateway.
 

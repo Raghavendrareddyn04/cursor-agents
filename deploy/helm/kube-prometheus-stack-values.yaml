@@ -12,8 +12,9 @@ grafana:
     nodePort: 30300
   grafana.ini:
     server:
-      root_url: "%(protocol)s://%(domain)s/grafana/"
-      serve_from_sub_path: true
+      root_url: "https://grafana.qualityoutsidethebox.org/"
+      serve_from_sub_path: false
+      domain: grafana.qualityoutsidethebox.org
   # Required for Sunny progress.json panels (datasources.yaml + sunny-deployment.json)
   plugins:
     - yesoreyeram-infinity-datasource

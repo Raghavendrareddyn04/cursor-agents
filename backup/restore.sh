@@ -16,7 +16,7 @@ mkdir -p ~/.hermes/skills/devops/sunny
 cp "$BACKUP/hermes.config.yaml" ~/.hermes/config.yaml
 cp "$BACKUP/vps-agentstest-secrets.env" ~/.hermes/.env
 chmod 600 ~/.hermes/.env
-cp "$BACKUP/sunny-bridge-SKILL.md" ~/.hermes/skills/devops/sunny/SKILL.md
+ln -sf "$REPO/deploy/sunny-bridge-SKILL.md" ~/.hermes/skills/devops/sunny/SKILL.md
 
 if [[ -f /opt/jarvis/server/config/server.yaml ]]; then
   echo "==> Restoring Jarvis server.yaml"
