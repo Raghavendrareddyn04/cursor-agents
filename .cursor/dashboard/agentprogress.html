@@ -101,6 +101,12 @@
     .action .item .msg { margin: 4px 0; }
     .action code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, var(--active) 14%, transparent); padding: 1px 6px; border-radius: 6px; }
 
+    .reports { margin-top: 18px; border-color: color-mix(in srgb, var(--done) 45%, var(--border)); }
+    .reports h2 { color: var(--done); }
+    .reports .stats { color: var(--muted); font-size: 12px; margin: 0 0 10px; padding: 0 16px; }
+    .reports .links { padding: 0 16px 14px; display: flex; flex-wrap: wrap; gap: 8px 14px; }
+    .reports .links a { font-weight: 600; }
+
     footer { margin-top: 18px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
     .err { color: var(--blocked); }
     .muted { color: var(--muted); }
@@ -148,13 +154,22 @@
     <div id="actionList"></div>
   </div>
 
+  <div class="panel reports" id="reportsPanel" style="display:none">
+    <h2>Published reports</h2>
+    <p class="stats" id="reportsStats"></p>
+    <div class="links" id="reportsLinks"></div>
+  </div>
+
   <div class="panel blockers" id="blockersPanel" style="display:none">
     <h2>Blockers</h2>
     <ul id="blockersList"></ul>
   </div>
 
   <footer>
-    <span>Auto-refreshes every 5 min &middot; live data every 60s</span>
+    <span>Auto-refreshes every 5 min &middot; live data every 60s &middot; durations include idle gaps between agent sessions</span>
+    <a href="/reports.html">Agent reports</a>
+    <a href="/test-catalog.html">Test catalog</a>
+    <a href="/grafana/">Grafana</a>
     <span id="feed" class="muted"></span>
     <span id="updated" class="muted"></span>
   </footer>
@@ -205,6 +220,33 @@
       return st === "done" || st === "completed";
     }
 
+    function stageDurationMs(s, now) {
+      var st = s.status || "pending";
+      if (s.durationMs != null && !isNaN(s.durationMs)) {
+        if (st === "active" && ms(s.startedAt)) return now - ms(s.startedAt);
+        if (st !== "active") return s.durationMs;
+      }
+      if (st === "active" && ms(s.startedAt)) return now - ms(s.startedAt);
+      var a = ms(s.startedAt), b = ms(s.endedAt);
+      if (a != null && b != null) return Math.max(0, b - a);
+      return null;
+    }
+
+    function sumStageTimeMs(stages, now) {
+      return stages.reduce(function (acc, s) {
+        var d = stageDurationMs(s, now);
+        return d == null ? acc : acc + d;
+      }, 0);
+    }
+
+    function formatIterations(s) {
+      var n = s.iterations;
+      if (n != null && n > 0) {
+        return s.iterationDetail ? (n + " (" + s.iterationDetail + ")") : String(n);
+      }
+      return "—";
+    }
+
     function render() {
       if (!data) return;
       var now = Date.now();
@@ -238,10 +280,9 @@
       $("totalCount").textContent = total;
       $("currentStage").textContent = data.currentStageLabel || (status === "complete" ? "Complete" : "—");
 
-      // Live clocks
-      var startMs = ms(data.workflowStartedAt);
-      var elapsed = data.timeConsumedMs;
-      if (status !== "complete" && startMs) elapsed = now - startMs;          // tick up live while running
+      // Live clocks — sum completed stage durations + active stage (not raw workflow wall clock).
+      var stageTimeMs = sumStageTimeMs(stages, now);
+      var elapsed = stageTimeMs > 0 ? stageTimeMs : data.timeConsumedMs;
       $("elapsed").textContent = fmtDur(elapsed);
 
       var remaining = data.estimatedRemainingMs;
@@ -261,10 +302,9 @@
       if (stages.length) {
         var rows = stages.map(function (s, i) {
           var st = s.status || "pending";
-          var dur = s.durationMs;
-          if (st === "active" && ms(s.startedAt)) dur = now - ms(s.startedAt);
+          var dur = stageDurationMs(s, now);
           var durTxt = (st === "pending") ? "—" : fmtDur(dur);
-          var iters = (s.iterations != null && s.iterations > 0) ? s.iterations : "—";
+          var iters = formatIterations(s);
           var rowCls = st === "active" ? " class='row-active'" : (st === "blocked" ? " class='row-blocked'" : (st === "needs-attention" ? " class='row-needs-attention'" : ""));
           var displayStatus = st === "completed" ? "completed" : st;
           return "<tr" + rowCls + ">"
@@ -310,6 +350,26 @@
         }).join("");
       } else {
         $("blockersPanel").style.display = "none";
+      }
+
+      // Published reports (complete runs)
+      var urls = data.reportsUrls || null;
+      var stats = data.reportsStats || null;
+      if (status === "complete" && urls) {
+        $("reportsPanel").style.display = "";
+        var statParts = [];
+        if (stats && stats.reportCount != null) statParts.push(stats.reportCount + " agent reports");
+        if (stats && stats.testCount != null) statParts.push(stats.testCount + " test methods");
+        if (stats && stats.artifactCount != null) statParts.push(stats.artifactCount + " artifacts");
+        $("reportsStats").textContent = statParts.length ? statParts.join(" · ") : "";
+        var linkHtml = "";
+        if (urls.hub) linkHtml += '<a href="' + esc(urls.hub) + '">Reports hub</a>';
+        if (urls.catalog) linkHtml += '<a href="' + esc(urls.catalog) + '">Test catalog</a>';
+        if (urls.artifacts) linkHtml += '<a href="' + esc(urls.artifacts) + '">Artifacts</a>';
+        if (urls.progress) linkHtml += '<a href="' + esc(urls.progress) + '">This dashboard</a>';
+        $("reportsLinks").innerHTML = linkHtml;
+      } else {
+        $("reportsPanel").style.display = "none";
       }
 
       // Footer

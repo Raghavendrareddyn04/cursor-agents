@@ -93,6 +93,12 @@ Before any pipeline logic, verify the environment can actually drive Sunny. A mi
    test -r .cursor/rules/sunny-orchestrator.mdc
 5. .env exists OR can be sourced from .env.example:
    test -f .env || test -f .env.example
+6. Reports publish toolchain:
+   test -x .sunny/publish-reports.sh
+   test -f .sunny/write-reports-html.py
+   test -f .sunny/build-test-catalog.py
+   test -f .sunny/build-artifacts-manifest.py
+   test -f .cursor/agents/reports-publish-agent.md
 ```
 
 Failures in steps 1–5 block the run with a precise error ("`MISSING: kubectl` — install via Rajesh stage or run provision.sh"). Step 3 only fails the run if a **generate-agent** file is missing; missing fix-agents degrade gracefully (loop will report "no fix agent registered" and continue). Step 4 missing means the rule file was moved — refuse to run.
@@ -100,11 +106,14 @@ Failures in steps 1–5 block the run with a precise error ("`MISSING: kubectl` 
 ## Phase −1 — Resume check (runs before intake, every invocation)
 
 1. **No `.sunny/context/state.json`** → fresh run → go to **Phase 0 (Intake)**.
-2. **`state.json` exists with `phase: "complete"`** → the run already finished. Report the summary and do nothing further unless the user explicitly asks for changes/another stage.
+2. **`state.json` exists with `phase: "complete"`** → the run already finished. If `reportsPublishedAt` is **missing**, run **Phase 5.7** once (Neel + Maya), print all report URLs from `state.json.reportsUrls`, then stop. Otherwise report the summary (live app + report URLs) and do nothing further unless the user explicitly asks for changes/another stage.
 3. **`state.json` exists and is not complete** → **RESUME**:
    1. Read `state.json`: `phase`, all iteration counters, `stages[]`, `completedAgents`, `lastVerdict`, `blockers`, `envKeys`, `graphUpdatedAt`.
    2. **Re-affirm environment idempotently via Maya** (`sourceAgent: resume`): ensure `.env`, `RUN_ID`, the dashboard bundle in `.sunny/web/`, and (if `fleetDomain` set) `CENTRAL_PUSH_TOKEN` exist — Maya recreates only what's missing and **never regenerates existing secrets**. Do **not** re-run intake generation.
-   3. **Restart the dashboard publisher if it's down** (early publisher in Phase 0, or confirm Nginx serves it post-Stage-5); Maya resumes fleet pushes. Re-print the dashboard URLs + `runId`.
+   3. **Dashboard publisher (cutover-aware):** run `.sunny/scripts/check-dashboard-cutover.sh --quiet`.
+      - **Exit 0 (cutover active):** do **not** start the early publisher on port 8787. Confirm `https://<domain>/agentprogress.html` returns 200 (edge nginx mount). If down, reload/restart edge nginx only — never `docker compose -f .sunny/web/docker-compose.yml up`.
+      - **Exit 1 (pre-Nginx):** if `http://localhost:8787/agentprogress.html` fails, start via `.sunny/scripts/start-early-publisher.sh` (refuses when cutover marker or HTTPS `localDashboardUrl` is set).
+      Maya resumes fleet pushes. Re-print the dashboard URLs + `runId`.
    4. **Confirm the graph is current:** if `graphUpdatedAt` is stale or `graphify-out/` is missing, run `graphify update <project-root>` (or `graphify .` to bootstrap) before launching the next agent.
    5. **Find the resume point:** the current stage is the one marked `active` in `stages[]` (or the first non-`done` stage). Re-enter that stage's phase loop and **re-run its last in-flight agent** (idempotent, so safe) before continuing; **skip every stage already marked `done`.**
       - **Stages marked `needs-attention` are NOT re-entered automatically** — they are a *soft-skip*. The original `needs-attention` notification stays in `.sunny/KNOWN_ISSUES.md` and on the dashboard; re-running the cap-hit stages on resume would burn the same 5 iterations and hit the same cap. Only re-enter a `needs-attention` stage if the user explicitly types a command like `sunny retry <stage>`.
@@ -119,8 +128,9 @@ Failures in steps 1–5 block the run with a precise error ("`MISSING: kubectl` 
 
 If the early-publisher `nginx:alpine` container (intake → Stage 4) or the host-Nginx-served `agentprogress.html` (Stage 5+) is unreachable, the user has no live view. Periodically (e.g. after every `context-agent` capture):
 
-- `curl -fsS http://localhost:8787/agentprogress.html` (early publisher) or `https://$DOMAIN/agentprogress.html` (post-Stage-5)
-- on failure, restart the publisher (`docker restart sunny-publisher` or `systemctl reload nginx`) and re-print the URL
+- If `.sunny/scripts/check-dashboard-cutover.sh --quiet` succeeds (exit 0): `curl -fsS https://$DOMAIN/agentprogress.html` only — **never** restart the early publisher on 8787.
+- Else: `curl -fsS http://localhost:8787/agentprogress.html`; on failure restart via `.sunny/scripts/start-early-publisher.sh` (not raw `docker compose up`).
+- Post-cutover nginx failure: reload edge nginx (`docker compose -f docker-compose/docker-compose.yml exec nginx nginx -s reload` or project equivalent) and re-print `https://$DOMAIN/agentprogress.html`.
 
 This is a Maya responsibility, not an agent's. If the publisher is down for more than 2 consecutive checks, escalate as a `needs-attention` on the dashboard.
 
@@ -297,6 +307,7 @@ Key **names** are still recorded in `state.json.envKeys` (operators need to know
 | Deployment Edge Fix Agent | `deployment-edge-fix-agent` | false |
 | Deployment Verify Agent | `deployment-verify-agent` | true |
 | Om Fix (deployment final-fix) | `om-fix-agent` | false |
+| Reports Publish Agent | `reports-publish-agent` | false |
 | Fleet Host Agent (standalone) | `fleet-host-agent` | false |
 
 ## Agent codenames
@@ -330,9 +341,10 @@ Each agent has a human codename (a family base name + `Verify`/`Fix`). Refer to 
 | Manoj (deploy backend) | Manoj — `deployment-backend-agent` | Manoj Verify — `deployment-backend-verify-agent` | Manoj Fix — `deployment-backend-fix-agent` |
 | Asha (deploy edge) | Asha — `deployment-edge-agent` | Asha Verify — `deployment-edge-verify-agent` | Asha Fix — `deployment-edge-fix-agent` |
 | Om (deploy final verify) | — | Om — `deployment-verify-agent` | Om Fix — `om-fix-agent` |
+| Neel (reports publish, post-#23) | Neel — `reports-publish-agent` | — | — |
 | Hari (fleet host, standalone) | Hari — `fleet-host-agent` | — | — |
 
-**Singletons:** Sunny — `sunny` (the only orchestrator — full pipeline #1–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
+**Singletons:** Sunny — `sunny` (the only orchestrator — full pipeline #1–#23) · Maya — `context-agent` (shared memory) · Leela — `issues-log-agent` (per-run issues ledger — `.sunny/KNOWN_ISSUES.md`) · Deepa — `documentation` (standalone) · Neel — `reports-publish-agent` (post-deploy reports hub; not a dashboard stage) · Hari — `fleet-host-agent` (standalone; deploys the global dashboard host).
 
 **Fleet host (Hari):** the global/fleet dashboard is a separate, run-once deployment. On the host that owns the **fleet domain**, invoke **Hari** to stand up the central collector (`.cursor/central/`) with TLS, so all worker VPSs can push to one board at `https://<fleet-domain>/`. Hari is **not** part of the per-project pipeline and does not use the Context Agent. Worker runs only need to be given the fleet domain at kickoff; Maya fetches the push token from `/api/fleet-config` automatically (and retries if Hari has not deployed yet).
 
@@ -445,9 +457,10 @@ Frontend Input → Sunny
    ./bin/smoke-test-deploy.sh --vps=<IP> --user=<USER> --domain=<DOMAIN>
    ```
    The script verifies SSH key-based auth, DNS propagation (A record → VPS_IP), inbound ports 22/80/443, and sudo NOPASSWD. If it exits non-zero, Rajesh (#18) **must not launch** — emit a Maya `blockers` row with the precise failure and `howTo` (e.g. *"Add A record for app.example.com → 1.2.3.4, wait 5 min for TTL, then re-run `sunny deploy`"*).
-7. **Start the early progress publisher** so the run is web-visible from agent #1:
+7. **Start the early progress publisher** so the run is web-visible from agent #1 (skipped when cutover marker exists):
    ```bash
-   docker compose -f .sunny/web/docker-compose.yml up -d   # or: PROGRESS_PORT=9090 docker compose -f .sunny/web/docker-compose.yml up -d
+   .sunny/scripts/start-early-publisher.sh   # guarded; refuses if .sunny/web/.dashboard-cutover exists
+   # raw (intake only): docker compose -f .sunny/web/docker-compose.yml up -d
    # no-Docker fallback: python -m http.server 8787 --directory .sunny/web
    ```
    Tell the user **all dashboard URLs** for this run:
@@ -585,7 +598,11 @@ Runs **after** the database is approved and **before** testing. Configures **Ngi
 **Dashboard cutover:** Naveen also serves the progress dashboard at `https://<domain>/agentprogress.html` (from the read-only `.sunny/web` mount) and Sunny **stops the early publisher** so its port is free for Certbot/Nginx:
 ```bash
 docker compose -f .sunny/web/docker-compose.yml down   # (or stop the python fallback)
+touch .sunny/web/.dashboard-cutover                      # persist cutover; resume must not restart 8787
+ss -tlnp | grep 8787 || true                             # confirm port free
+.sunny/scripts/check-dashboard-cutover.sh                # exit 0 = cutover active
 ```
+Resume and Maya use `.sunny/scripts/check-dashboard-cutover.sh` (marker file and/or HTTPS `localDashboardUrl` in `state.json`) — **never** run raw `docker compose … up` on `.sunny/web/docker-compose.yml` after cutover.
 
 **Exit phrase (must match exactly):** `Nginx and SSL approved.`
 
@@ -736,7 +753,7 @@ After the exit phrase, proceed to **Phase 5 — Production deployment** (do not 
 
 ## Phase 5 — Production deployment (VPS / Minikube)
 
-Runs **only after** `Final approval granted. System is production-ready.` (dashboard **#17**). Stages **#18–#23** deploy to the VPS with the **same generate → verify (readonly) → fix loop** as architecture, database, and nginx: one generate agent, then a readonly verify agent with an exact exit phrase, then a fix agent on failure (cap 5 per loop). Dashboard **#23** is verify/fix only (Om) — no separate generate agent. Do not mark `phase: complete` until Om emits `Production deployment verified. System is live.`
+Runs **only after** `Final approval granted. System is production-ready.` (dashboard **#17**). Stages **#18–#23** deploy to the VPS with the **same generate → verify (readonly) → fix loop** as architecture, database, and nginx: one generate agent, then a readonly verify agent with an exact exit phrase, then a fix agent on failure (cap 5 per loop). Dashboard **#23** is verify/fix only (Om) — no separate generate agent. Do **not** mark `phase: complete` until **Phase 5.7** (Neel) emits `Reports published and verified.` after Om's exit phrase.
 
 **Production non-negotiables:** Minikube production profile; kube-prometheus-stack; probes + limits on every pod; Grafana + Sunny `progress.json` integration; `deploy/port-map.md`; host Nginx TLS + PM2; `deploy/scripts/health-check.sh` green before Om final approval.
 
@@ -869,14 +886,29 @@ repeat:
 repeat:
   1. Launch deployment-verify-agent (readonly) with FULL deployment context
   2. Launch context-agent → deployment-verify-report.md
-  3. if lastVerdict == exit phrase → break to Final Approval (phase complete)
-  4. if deploymentVerifyIterations >= 5 → needs-attention; complete with outstanding items listed
+  3. if lastVerdict == exit phrase → break to Phase 5.7 (Reports publish)
+  4. if deploymentVerifyIterations >= 5 → needs-attention; continue to Phase 5.7 if deploy is live
   5. Launch om-fix-agent
   6. Launch context-agent → deployment-fix-log.md
   7. goto repeat
 ```
 
-After final exit phrase: live URLs, Grafana dashboard, `.env` credential location, port map, run guide.
+### 5.7 Reports publish (Neel) — post-#23, pre-complete
+
+**Not a dashboard stage** — runs after #23 succeeds; `counts.total` stays **23**.
+
+**Prerequisite:** `lastVerdict` == `Production deployment verified. System is live.`
+
+**Exit phrase:** `Reports published and verified.`
+
+```
+1. Launch reports-publish-agent — runs `bash .sunny/publish-reports.sh --verify` (script-first)
+2. Launch context-agent → reports-publish-summary.md; merge reportsUrls/reportsPublishedAt into state.json
+3. if lastVerdict == exit phrase → set phase: complete
+4. if publish fails → needs-attention notification; retry once; do NOT set phase: complete
+```
+
+After final exit phrase: live app URLs, **reports hub** (`https://<domain>/reports.html`), **test catalog** (`/test-catalog.html`), **artifacts** (`/artifacts/postman/collection.json`), Grafana dashboard, `.env` credential location, port map, run guide.
 
 ## Loop safety & edge cases (no infinite loops)
 
@@ -919,7 +951,7 @@ If you changed code/config: run `graphify update <project-root>` before returnin
 - On loop exit: quote the exact verdict line.
 - On needs-attention: note the stage was capped/deferred, surface the items as notifications (they appear on the local + fleet dashboards), and continue — do not halt.
 - On blocked (hard dependency only): list blockers from `state.json` and ask the user how to proceed.
-- On complete: deliver run guide, architecture diagram summary, links to key files, and any outstanding `needs-attention`/`actionRequired` items.
+- On complete: deliver run guide, architecture diagram summary, links to key files, **published report URLs** (`reportsUrls` from `state.json`), and any outstanding `needs-attention`/`actionRequired` items.
 
 ## Do not
 

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content="300" />
+  <title>Sunny — Agent Reports</title>
+  <link rel="stylesheet" href="reports-shared.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1><span class="sun">&#9728;</span> Sunny — Agent Reports</h1>
+    <nav class="top-nav" id="topNav">
+      <a href="#overview" data-view="overview">Overview</a>
+      <a href="#all" data-view="all" class="active">All reports</a>
+      <a href="/test-catalog.html">Test catalog</a>
+      <a href="#artifacts" data-view="artifacts">Artifacts</a>
+      <a href="/agentprogress.html">Progress</a>
+    </nav>
+    <span class="sub" id="progressLine"></span>
+    <span class="pill" id="countPill">loading</span>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <button type="button" class="sidebar-toggle" id="sidebarToggle">Show / hide report list</button>
+    <div class="search sticky-search"><input id="q" type="search" placeholder="Filter reports…" autocomplete="off" /></div>
+    <div id="nav"></div>
+  </aside>
+
+  <main id="content">
+    <p class="empty">Select a report from the sidebar.</p>
+  </main>
+
+  <footer class="site-footer">
+    <span id="gen">Generated: —</span>
+    <span id="footerStats">—</span>
+    <a href="/test-catalog.html">Test catalog</a>
+    <a href="/agentprogress.html">Progress dashboard</a>
+    <span>Refreshes every 5 min</span>
+  </footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let manifest = null;
+    let progress = null;
+    let artifacts = null;
+    let activeId = null;
+    let currentView = "all";
+
+    const RELATED = {
+      "backend-test-report": ["backend-unit-test-verify-report", "backend-integration-test-verify-report", "backend-functional-test-verify-report"],
+      "frontend-test-report": ["frontend-integration-test-verify-report", "frontend-functional-test-verify-report", "frontend-unit-test-verify-report"],
+      "production-report": ["production-fix-log", "deployment-platform-verify-report", "deployment-verify-report"],
+      "deployment-verify-report": ["deployment-fix-log", "deployment-edge-verify-report", "deployment-backend-verify-report"],
+    };
+
+    const STAGE_REPORTS = {
+      intake: [],
+      frontend_sanitize: ["frontend-sanitize-summary", "frontend-sanitize-verify-report"],
+      architecture: ["architecture-summary", "architecture-verify-report"],
+      supabase_removal: ["supabase-removal-summary", "supabase-removal-verify-report"],
+      backend: ["backend-summary", "verify-report"],
+      backend_verify: ["verify-report", "backend-summary"],
+      database: ["database-summary", "database-verify-report"],
+      nginx: ["nginx-summary", "nginx-verify-report"],
+      testing_backend: ["backend-test-report", "backend-unit-test-verify-report", "backend-integration-test-verify-report", "backend-functional-test-verify-report"],
+      testing_frontend: ["frontend-test-report", "frontend-unit-test-verify-report", "frontend-integration-test-verify-report", "frontend-functional-test-verify-report"],
+      testing_system: ["system-integration-test-report", "system-integration-test-verify-report"],
+      swagger: ["swagger-report", "swagger-verify-report"],
+      javadoc: ["javadoc-report", "javadoc-verify-report"],
+      api_collection: ["api-collection-report", "api-collection-verify-report"],
+      api_testing: ["api-test-report", "api-test-verify-report"],
+      api_performance: ["api-performance-report", "api-performance-verify-report"],
+      production: ["production-report", "production-fix-log"],
+      deployment_platform: ["deployment-platform-summary", "deployment-platform-verify-report"],
+      deployment_provision: ["server-provision-summary", "server-provision-verify-report"],
+      deployment_database: ["deployment-database-summary", "deployment-database-verify-report"],
+      deployment_backend: ["deployment-backend-summary", "deployment-backend-verify-report"],
+      deployment_edge: ["deployment-edge-summary", "deployment-edge-verify-report"],
+      deployment_verify: ["deployment-verify-report", "deployment-fix-log"],
+    };
+
+    function esc(s) {
+      return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    function verdictBadge(v) {
+      if (!v) return "";
+      return `<span class="verdict ${esc(v)}">${esc(v)}</span>`;
+    }
+
+    function renderNav(filter) {
+      const nav = $("nav");
+      const q = (filter || "").trim().toLowerCase();
+      if (!manifest || !manifest.reports) {
+        nav.innerHTML = "<p class='empty'>No manifest</p>";
+        return;
+      }
+      const groups = {};
+      manifest.reports.forEach((r) => {
+        const hay = (r.title + " " + r.file + " " + r.category + " " + (r.stage || "")).toLowerCase();
+        if (q && !hay.includes(q)) return;
+        (groups[r.category] = groups[r.category] || []).push(r);
+      });
+      let html = "";
+      Object.keys(groups).sort().forEach((cat) => {
+        html += "<div class='cat'>" + esc(cat) + " (" + groups[cat].length + ")</div>";
+        groups[cat].sort((a, b) => (b.mtime || "").localeCompare(a.mtime || "")).forEach((r) => {
+          html += "<a class='nav-item" + (r.id === activeId ? " active" : "") + "' href='#" + esc(r.id) + "' data-id='" + esc(r.id) + "'>"
+            + "<div class='t'>" + esc(r.title) + " " + verdictBadge(r.verdict) + "</div>"
+            + "<div class='f'>" + esc(r.file) + "</div></a>";
+        });
+      });
+      nav.innerHTML = html || "<p class='empty'>No matches</p>";
+      nav.querySelectorAll(".nav-item").forEach((el) => {
+        el.addEventListener("click", (e) => {
+          e.preventDefault();
+          setView("all");
+          loadReport(el.dataset.id, true);
+        });
+      });
+    }
+
+    function relatedHtml(id) {
+      const links = RELATED[id] || [];
+      const report = manifest.reports.find((r) => r.id === id);
+      let chips = links.map((rid) => {
+        const r = manifest.reports.find((x) => x.id === rid);
+        if (!r) return "";
+        return `<a class="chip" href="#${esc(rid)}" data-id="${esc(rid)}">${esc(r.title)}</a>`;
+      }).join("");
+      if (report && (report.id.includes("backend") || report.id.includes("frontend")) && report.id.includes("test")) {
+        const layer = report.id.includes("backend") ? "backend" : "frontend";
+        chips += `<a class="chip" href="/test-catalog.html">${esc("Open test catalog (" + layer + ")")}</a>`;
+      }
+      if (!chips) return "";
+      return `<div class="related-chips"><strong style="font-size:12px;color:var(--muted)">Related:</strong> ${chips}</div>`;
+    }
+
+    function pipelineHtml() {
+      if (!progress || !progress.stages) return "";
+      const chips = progress.stages.map((s, i) => {
+        const done = s.status === "completed" || s.status === "done";
+        const ids = STAGE_REPORTS[s.key] || [];
+        const first = ids.length ? ids[0] : null;
+        const title = (i + 1) + ". " + s.label + (s.verdict ? " — " + s.verdict : "");
+        if (first) {
+          return `<a class="stage-chip ${done ? "done" : ""}" href="#${esc(first)}" data-id="${esc(first)}" title="${esc(title)}">${esc(s.label)}</a>`;
+        }
+        return `<span class="stage-chip ${done ? "done" : ""}" title="${esc(title)}">${esc(s.label)}</span>`;
+      }).join("");
+      const pct = progress.counts ? Math.round((progress.counts.done / progress.counts.total) * 100) : 0;
+      return `<div class="pipeline-panel"><h2>Pipeline (${progress.counts.done}/${progress.counts.total} · ${pct}%)</h2><div class="timeline">${chips}</div></div>`;
+    }
+
+    function artifactsHtml() {
+      if (!artifacts || !artifacts.artifacts) {
+        return "<p class='empty'>No artifacts manifest. Run publish-reports.sh.</p>";
+      }
+      const groups = {};
+      artifacts.artifacts.forEach((a) => {
+        (groups[a.category] = groups[a.category] || []).push(a);
+      });
+      let html = `<div class="panel-section"><h2>Artifacts</h2><p class="sub">${artifacts.availableCount}/${artifacts.count} available</p>`;
+      Object.keys(groups).sort().forEach((cat) => {
+        html += `<h3 style="font-size:14px;margin:16px 0 8px">${esc(cat)}</h3>`;
+        groups[cat].forEach((a) => {
+          const cls = a.available ? "" : " unavailable";
+          html += `<div class="artifact-row${cls}"><span class="label">${esc(a.label)}</span>`;
+          if (a.available) {
+            html += `<a class="btn" href="${esc(a.path)}" target="_blank" rel="noopener">Open</a>`;
+          } else {
+            html += `<span class="sub">${esc(a.note || "Unavailable")}</span>`;
+          }
+          html += "</div>";
+        });
+      });
+      html += "</div>";
+      return html;
+    }
+
+    function overviewHtml() {
+      const cats = {};
+      manifest.reports.forEach((r) => {
+        cats[r.category] = (cats[r.category] || 0) + 1;
+      });
+      const catList = Object.entries(cats).sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `<li><strong>${esc(k)}</strong> — ${v} reports</li>`).join("");
+      return pipelineHtml()
+        + `<div class="panel-section"><h2>Report categories</h2><ul>${catList}</ul>`
+        + `<p>Select a stage chip above or browse the sidebar. Use <a href="/test-catalog.html">Test catalog</a> for per-method inventory.</p></div>`;
+    }
+
+    function setView(view) {
+      currentView = view;
+      document.querySelectorAll(".top-nav a[data-view]").forEach((a) => {
+        a.classList.toggle("active", a.dataset.view === view);
+      });
+      if (view === "overview") {
+        activeId = null;
+        $("content").innerHTML = overviewHtml();
+        bindStageChips();
+        renderNav($("q").value);
+      } else if (view === "artifacts") {
+        activeId = null;
+        $("content").innerHTML = artifactsHtml();
+        renderNav($("q").value);
+      } else {
+        renderNav($("q").value);
+      }
+    }
+
+    function bindStageChips() {
+      document.querySelectorAll(".stage-chip[data-id], .related-chips .chip[data-id]").forEach((el) => {
+        el.addEventListener("click", (e) => {
+          e.preventDefault();
+          setView("all");
+          loadReport(el.dataset.id, true);
+        });
+      });
+    }
+
+    async function loadReport(id, pushHash) {
+      if (!manifest) return;
+      const item = manifest.reports.find((r) => r.id === id);
+      if (!item) return;
+      activeId = id;
+      currentView = "all";
+      document.querySelectorAll(".top-nav a[data-view]").forEach((a) => {
+        a.classList.toggle("active", a.dataset.view === "all");
+      });
+      if (pushHash) location.hash = id;
+      renderNav($("q").value);
+      $("content").innerHTML = relatedHtml(id) + "<p class='empty'>Loading " + esc(item.title) + "…</p>";
+      try {
+        const r = await fetch(item.path, { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        $("content").innerHTML = relatedHtml(id) + await r.text();
+        bindStageChips();
+      } catch (e) {
+        $("content").innerHTML = relatedHtml(id) + "<p class='err'>Could not load report: " + esc(e.message) + "</p>";
+      }
+    }
+
+    async function load() {
+      try {
+        const [mr, pr, ar] = await Promise.all([
+          fetch("reports-manifest.json", { cache: "no-store" }),
+          fetch("progress.json", { cache: "no-store" }).catch(() => null),
+          fetch("artifacts-manifest.json", { cache: "no-store" }).catch(() => null),
+        ]);
+        if (!mr.ok) throw new Error("HTTP " + mr.status);
+        manifest = await mr.json();
+        if (pr && pr.ok) progress = await pr.json();
+        if (ar && ar.ok) artifacts = await ar.json();
+        $("countPill").textContent = manifest.count + " reports";
+        $("gen").textContent = "Generated: " + (manifest.generatedAt || "—");
+        $("footerStats").textContent = manifest.count + " reports · " + (artifacts ? artifacts.availableCount + " artifacts" : "artifacts pending");
+        if (progress && progress.counts) {
+          const pct = Math.round((progress.counts.done / progress.counts.total) * 100);
+          $("progressLine").textContent =
+            "Pipeline " + progress.counts.done + "/" + progress.counts.total +
+            " (" + pct + "%) · " + (progress.currentStageLabel || progress.phase || "running");
+        }
+        const hash = (location.hash || "").replace(/^#/, "");
+        if (hash === "overview") {
+          setView("overview");
+        } else if (hash === "artifacts") {
+          setView("artifacts");
+        } else if (hash === "all") {
+          setView("all");
+        } else if (hash) {
+          loadReport(hash, false);
+        } else {
+          setView("overview");
+        }
+        renderNav($("q").value);
+      } catch (e) {
+        $("countPill").textContent = "error";
+        $("nav").innerHTML = "<p class='err'>Could not load reports-manifest.json</p>";
+        $("content").innerHTML = "<p class='err'>" + esc(e.message) + "</p>";
+      }
+    }
+
+    $("q").addEventListener("input", () => renderNav($("q").value));
+    $("sidebarToggle").addEventListener("click", () => $("sidebar").classList.toggle("collapsed"));
+    document.querySelectorAll(".top-nav a[data-view]").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const view = a.dataset.view;
+        location.hash = view;
+        setView(view);
+      });
+    });
+    window.addEventListener("hashchange", () => {
+      const id = (location.hash || "").replace(/^#/, "");
+      if (id === "overview" || id === "artifacts" || id === "all") {
+        setView(id);
+      } else if (id && id !== activeId) {
+        loadReport(id, false);
+      }
+    });
+    load();
+    setInterval(load, 300000);
+  </script>
+</body>
+</html>
