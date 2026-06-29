@@ -243,7 +243,7 @@ else
     "system-integration-test-agent" "swagger-agent" "javadoc-agent"
     "api-collection-agent" "api-test-agent" "api-performance-test-agent" "production-standards-agent"
     "deployment-platform-agent" "server-provision-agent" "deployment-database-agent"
-    "deployment-backend-agent" "deployment-edge-agent" "om-fix-agent"
+    "deployment-backend-agent" "deployment-edge-agent" "om-fix-agent" "reports-publish-agent"
   )
   for slug in "${REQUIRED_AGENTS[@]}"; do
     if [[ ! -f ".cursor/agents/${slug}.md" ]]; then

@@ -100,6 +100,7 @@ Graphify is pre-installed by the operator (`uv tool install graphifyy` → `grap
 ├── deployment-edge-fix-log.md
 ├── deployment-verify-report.md    # Final collective deployment audit (Om)
 ├── deployment-fix-log.md          # History of final deployment fixes (Om Fix)
+├── reports-publish-summary.md     # Published reports hub URLs + stats (Neel)
 └── state.json                     # Machine-readable workflow state
 
 .sunny/web/                        # Live progress dashboard bundle (served read-only; never touches the generated backend)
@@ -127,7 +128,7 @@ Always read and update `state.json` on every invocation:
   "localDashboardUrl": "https://<domain>/agentprogress.html (or early http://<ip>:8787/...)",
   "centralUrl": "https://<central-domain> (fleet collector, or empty if not configured)",
   "workflowStartedAt": "ISO-8601 timestamp set once at intake",
-  "phase": "intake | frontend_sanitize | frontend_sanitize_verify | frontend_sanitize_fix | architecture | architecture_verify | architecture_fix | supabase_removal | supabase_removal_verify | supabase_removal_fix | backend | backend_verify | issue_resolution | database | database_verify | database_fix | nginx | nginx_verify | nginx_fix | testing_backend | testing_frontend | testing_system | swagger | javadoc | api_collection | api_testing | api_performance | production | production_fix | deployment_platform | deployment_platform_verify | deployment_platform_fix | deployment_provision | deployment_provision_verify | deployment_provision_fix | deployment_database | deployment_database_verify | deployment_database_fix | deployment_backend | deployment_backend_verify | deployment_backend_fix | deployment_edge | deployment_edge_verify | deployment_edge_fix | deployment_verify | deployment_fix | complete | blocked",
+  "phase": "intake | ... | deployment_verify | deployment_fix | reports_publish | complete | blocked",
   "frontendSanitizeVerifyIterations": 0,
   "architectureVerifyIterations": 0,
   "supabaseRemovalVerifyIterations": 0,
@@ -164,6 +165,14 @@ Always read and update `state.json` on every invocation:
   ],
   "lastAgent": "slug of the most recently launched agent (for resume diagnostics)",
   "resumeCount": 0,
+  "reportsPublishedAt": "ISO-8601 when Neel publish+verify succeeded (optional until Phase 5.7)",
+  "reportsUrls": {
+    "hub": "https://<domain>/reports.html",
+    "catalog": "https://<domain>/test-catalog.html",
+    "artifacts": "https://<domain>/artifacts/postman/collection.json",
+    "progress": "https://<domain>/agentprogress.html"
+  },
+  "reportsStats": { "reportCount": 0, "testCount": 0, "artifactCount": 0 },
   "updatedAt": "ISO-8601 timestamp (checkpoint time — written atomically after every capture)"
 }
 ```
@@ -172,7 +181,7 @@ Always read and update `state.json` on every invocation:
 
 `state.json` is the **single source of truth for where the run is**, so a crash, reboot, or closed session loses nothing. Maintain it so Sunny's **Phase −1 resume check** can always continue safely:
 
-- **Atomic checkpoint after every capture.** Write `state.json` (and `progress.json`) to a temp file and `rename` over the target so an interrupted write never corrupts state. Stamp `updatedAt` each time. This is your durability guarantee.
+- **Atomic checkpoint after every capture.** Write `state.json` to a temp file and `rename` over the target so an interrupted write never corrupts state. Write `progress.json` via **`python3 .sunny/write-progress-json.py`** (stdin JSON) — it atomically replaces the file and sets mode **644** so nginx can serve it from the bind mount (raw temp+rename leaves mode 600 under default umask). Stamp `updatedAt` each time. This is your durability guarantee.
 - **Mark in-progress, then done.** When a stage starts, its `stages[]` entry is `active` (in-progress); only set it `done` after the stage's exit phrase/verdict is recorded. The resume check treats the `active` stage (or first non-`done`) as the point to re-enter, so an `active` stage is simply re-run (agents are idempotent).
 - **Counters persist across resumes.** Never reset iteration counters on resume — they carry the loop caps forward so a restart can't dodge a cap or loop forever.
 - **Idempotent restore.** On `sourceAgent: resume`, do **not** re-initialize: recreate only what is missing (`.env` keys, `RUN_ID`, the `.sunny/web/` bundle, fleet token), never regenerate existing secrets or overwrite summaries. Increment `resumeCount`, set `lastAgent`, refresh `progress.json`, and resume fleet pushes.
@@ -269,7 +278,9 @@ Always read and update `state.json` on every invocation:
 | deployment-edge-verify-agent (approved) | `deployment_verify` |
 | deployment-verify-agent (not verified) | `deployment_verify` |
 | om-fix-agent | `deployment_fix` |
-| deployment-verify-agent (verified) | `complete` |
+| deployment-verify-agent (verified) | `reports_publish` |
+| reports-publish-agent (not verified) | `reports_publish` |
+| reports-publish-agent (verified) | `complete` |
 | Max iterations exceeded | Keep advancing phase where technically possible; mark the capped stage `needs-attention`. Use `blocked` only when a hard dependency makes continuation impossible. |
 
 `{layer}` is one of `unit`, `integration`, `functional`. Within a side, the three layers are verified in order (unit → integration → functional); the side only advances when the functional layer is satisfied **and** the unit and integration layers were already satisfied.
@@ -339,7 +350,9 @@ Each `phase` value maps to exactly one dashboard stage. Seed `stages[]` from thi
 | 22 | Edge | `deployment-edge-agent` | `deployment-edge-verify-agent` | `deployment-edge-fix-agent` | `deploymentEdgeVerifyIterations` |
 | 23 | Final | — | `deployment-verify-agent` | `om-fix-agent` | `deploymentVerifyIterations` |
 
-> Note `backend` and `backend_verify` are **separate** dashboard stages. The `complete` phase marks `deployment_verify` done (all 23 stages). Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only. Full per-stage detail: [`ARCHITECTURE.md` §0.2 + §6.3](ARCHITECTURE.md#02-dashboard-stages-master-index-123).
+> Note `backend` and `backend_verify` are **separate** dashboard stages. The `complete` phase marks `deployment_verify` done (all **23** dashboard stages) **and** requires `reportsPublishedAt` from Neel (Phase 5.7 — not a 24th stage). Use stage status `needs-attention` when a loop is capped/deferred but the pipeline continues; reserve `blocked` / `phase: "blocked"` for a **hard stop** only. Full per-stage detail: [`ARCHITECTURE.md` §0.2 + §6.3](ARCHITECTURE.md#02-dashboard-stages-master-index-123).
+
+**After `reports-publish-agent` succeeds:** persist `reports-publish-summary.md`, copy `reportsUrls` / `reportsStats` / `reportsPublishedAt` from `.sunny/web/publish-status.json` (or Neel's structured output), set `phase: complete`, and include `reportsUrls` in `progress.json`.
 
 ### How to maintain it
 
@@ -431,7 +444,8 @@ Create or reset the store:
 1. Write `project-context.md` from the frontend analysis and user requirements — including the **Deployment & domain** section (domain + Certbot email passed by Sunny; mark as open questions if absent). Note if the frontend is Lovable-exported (Supabase/Lovable expected until Isha runs).
 2. Initialize `state.json` with `runId` as the **first field**, then `phase: "intake"`, the `project` block (name/domain/acmeEmail), `workflowStartedAt = now`, counters at 0, empty blockers, and `stages[]` seeded from the dashboard stage map (23 entries).
 3. Create empty placeholder files for phase reports if they do not exist.
-4. Seed the dashboard: create `.sunny/web/`, copy `agentprogress.html` + `docker-compose.yml` + `nginx-progress.conf` from `.cursor/dashboard/`, copy `push-fleet.py` from `.cursor/dashboard/push-fleet.py` → `.sunny/push-fleet.py`, copy `KNOWN_ISSUES.md` from `.cursor/dashboard/KNOWN_ISSUES.md` → `.sunny/KNOWN_ISSUES.md` **only if missing** (empty per-project ledger — never copy issues from another project), set `**Project:** {name}` in the KNOWN_ISSUES header, and write the first `progress.json` with `stages` as a **JSON array** and `counts.total: 23`. (Sunny starts the publisher; you only create the files.)
+4. Seed the dashboard: create `.sunny/web/`, copy `agentprogress.html` + `docker-compose.yml` + `nginx-progress.conf` from `.cursor/dashboard/`, copy `push-fleet.py` from `.cursor/dashboard/push-fleet.py` → `.sunny/push-fleet.py`, copy `write-progress-json.py` from `.cursor/dashboard/write-progress-json.py` → `.sunny/write-progress-json.py`, copy `KNOWN_ISSUES.md` from `.cursor/dashboard/KNOWN_ISSUES.md` → `.sunny/KNOWN_ISSUES.md` **only if missing** (empty per-project ledger — never copy issues from another project), set `**Project:** {name}` in the KNOWN_ISSUES header, and write the first `progress.json` via `python3 .sunny/write-progress-json.py` with `stages` as a **JSON array** and `counts.total: 23`. (Sunny starts the publisher; you only create the files.)
+   - **Reports toolchain (Neel):** if `.sunny/publish-reports.sh` is missing, copy all files from `.cursor/sunny/` → `.sunny/` and `reports.html` + `reports-shared.css` from `.cursor/web/` → `.sunny/web/` (or run `bin/seed-sunny-reports.sh` from cursor-agents). Fleet troubleshooting: `.cursor/dashboard/REPORTS-PUBLISH-ISSUES.md`.
 5. **Bootstrap secrets & environment** — generate the root `.env` with strong secrets so no human has to (see "Secrets & environment bootstrap" below).
 6. **Register fleet identity** (same agents on every VPS — each machine is an independent run):
    - **`RUN_ID`:** if not already in `.env`, generate once as `<sanitized-project>-<uuid4[:8]>` and persist. Mirror to `state.json.runId` immediately.
@@ -446,7 +460,7 @@ Sunny calls you with `sourceAgent: resume` when a prior run is being continued (
 1. Read `state.json` and report the resume point: `phase`, the `active`/first-not-done stage, iteration counters, open `blockers`.
 2. **Recreate only what's missing** — never clobber existing state: ensure `.env` exists with the minimum keys (append only missing ones; never regenerate existing secrets), `RUN_ID` is present, the `.sunny/web/` bundle exists (re-copy only if absent), and `CENTRAL_PUSH_TOKEN` is set if `fleetDomain` is configured (re-fetch from `/api/fleet-config` if missing).
 3. Increment `resumeCount`, set `lastAgent`, stamp `updatedAt` (atomic write).
-4. Rewrite `progress.json` from current state and run `python3 .sunny/push-fleet.py` so both dashboards immediately show the run is live again.
+4. Rewrite `progress.json` from current state via `python3 .sunny/write-progress-json.py` and run `python3 .sunny/push-fleet.py` so both dashboards immediately show the run is live again.
 5. Return a handoff telling Sunny exactly which stage/agent to re-enter (the `active` stage's next agent). Do not advance the phase — Sunny re-runs the interrupted stage idempotently.
 
 ### 2. On agent output capture (every invocation)
@@ -462,7 +476,7 @@ You will receive:
 2. Summarize the agent output into the appropriate file (see templates below).
 3. Update `state.json`: phase, `lastVerdict`, increment counters, append to `completedAgents`, set `lastAgent`, update `stages[]` (status/timing/iterations — mark the finished stage `done` only once its exit verdict is recorded; the next stage becomes `active`), set `updatedAt`. **Write atomically** (temp file + rename) so an interrupted write never corrupts the run's recovery point.
 4. If the source agent emitted a verdict line, record it exactly in `lastVerdict`.
-5. Rewrite `.sunny/web/progress.json` from the updated state (see "Progress dashboard" above), also via atomic write.
+5. Rewrite `.sunny/web/progress.json` from the updated state (see "Progress dashboard" above) via `python3 .sunny/write-progress-json.py` (pipe JSON on stdin — never raw temp+rename; the helper sets mode 644 for nginx).
 6. Return a **handoff package** for the next agent (see Output expectations).
 7. When agents report new blockers or recurring failures, launch **issues-log-agent (Leela)** after capture — Leela appends to `.sunny/KNOWN_ISSUES.md` (do not paste arcadian-wealth or other repo-specific issues into new projects).
 
@@ -1061,6 +1075,7 @@ Append each remediation cycle:
 | deployment-edge-fix-agent | `deployment-edge-verify-report.md`, `deployment-edge-summary.md`, `deployment-edge-fix-log.md` tail |
 | deployment-verify-agent | **All** deployment summaries + per-step verify reports + `production-report.md`, `deploy/port-map.md`, `deploy/README.md` |
 | om-fix-agent | `deployment-verify-report.md` (findings), all deployment summaries/reports, `deployment-fix-log.md` tail |
+| reports-publish-agent | `deployment-verify-report.md`, `state.json`, `project-context.md`; read `.sunny/web/publish-status.json` after `publish-reports.sh --verify` |
 
 ## Output expectations
 

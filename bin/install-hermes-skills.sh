@@ -5,10 +5,12 @@
 #  Idempotent. Safe to re-run after `git pull` in cursor-agents.
 #
 #  Installs:
-#    ~/.hermes/skills/devops/sunny/SKILL.md  ← deploy/sunny-bridge-SKILL.md
+#    ~/.hermes/skills/devops/sunny/SKILL.md           (copy, not symlink)
+#    ~/.hermes/skills/devops/sunny-agents/<slug>/     (Hermes persona skills)
 #
-#  Does NOT duplicate the 76+ agent personas — Hermes reads them from
-#  /opt/cursor-agents/.cursor/agents/*.md via delegate_task (see HERMES-MAPPING.md).
+#  Personas are converted from .cursor/agents/*.md so Hermes loads trusted
+#  skills under ~/.hermes/skills/ (symlinks outside that tree trigger security
+#  warnings and subagents may not get persona context). See HERMES-MAPPING.md.
 # ============================================================================
 set -euo pipefail
 
@@ -16,6 +18,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 SKILL_SRC="$ROOT/deploy/sunny-bridge-SKILL.md"
 SKILL_DST="$HERMES_HOME/skills/devops/sunny/SKILL.md"
+PERSONAS_DST="$HERMES_HOME/skills/devops/sunny-agents"
+CONVERT="$ROOT/bin/convert-cursor-to-hermes-personas.py"
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; NC='\033[0m'
 say_ok()  { printf "${GREEN}OK${NC}   %s\n" "$*"; }
@@ -41,8 +45,19 @@ fi
 say_ok "hermes $(hermes --version 2>/dev/null | head -1 || echo 'present')"
 
 mkdir -p "$(dirname "$SKILL_DST")"
-ln -sf "$SKILL_SRC" "$SKILL_DST"
-say_ok "Linked $SKILL_DST → $SKILL_SRC"
+if [[ -L "$SKILL_DST" ]]; then
+  rm -f "$SKILL_DST"
+fi
+cp -f "$SKILL_SRC" "$SKILL_DST"
+say_ok "Copied sunny bridge → $SKILL_DST"
+
+if [[ ! -f "$CONVERT" ]]; then
+  say_err "Missing $CONVERT"
+  exit 1
+fi
+python3 "$CONVERT" "$PERSONAS_DST"
+PERSONA_COUNT=$(find "$PERSONAS_DST" -mindepth 2 -name 'SKILL.md' 2>/dev/null | wc -l)
+say_ok "Hermes persona skills: $PERSONA_COUNT under $PERSONAS_DST"
 
 # Agent inventory (informational — not copied into Hermes)
 AGENT_COUNT=$(find "$ROOT/.cursor/agents" -maxdepth 1 -name '*.md' 2>/dev/null | wc -l)
@@ -55,7 +70,7 @@ REQUIRED=(
   jhipster-backend-agent database-agent nginx-agent
   production-standards-agent deployment-platform-agent server-provision-agent
   deployment-database-agent deployment-backend-agent deployment-edge-agent
-  deployment-verify-agent om-fix-agent context-agent
+  deployment-verify-agent om-fix-agent reports-publish-agent context-agent
 )
 for slug in "${REQUIRED[@]}"; do
   if [[ ! -f "$ROOT/.cursor/agents/${slug}.md" ]]; then
